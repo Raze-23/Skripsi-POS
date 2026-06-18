@@ -44,7 +44,7 @@ class User extends Authenticatable implements HasAvatar
         $name = urlencode($this->name);
         return "https://ui-avatars.com/api/?name={$name}&color=ffffff&background=10b981&bold=true";
     }
-    
+
     /**
      * Get the attributes that should be cast.
      *
