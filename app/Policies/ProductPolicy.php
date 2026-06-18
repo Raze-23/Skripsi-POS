@@ -12,9 +12,9 @@ class ProductPolicy
         if ($user->role === 'admin') {
             return true;
         }
-        return null; // Lanjut ke pengecekan spesifik di bawah
+        return null; 
     }
-    
+
     /**
      * Determine whether the user can view any models.
      */
