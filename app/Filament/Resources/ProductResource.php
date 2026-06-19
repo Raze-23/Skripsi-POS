@@ -93,7 +93,8 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('foto')->circular(),
+                Tables\Columns\ImageColumn::make('foto')->circular()
+                    ->default(asset('images/notfound.png')),
                 Tables\Columns\TextColumn::make('sku')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('nama')->searchable(),
                 Tables\Columns\TextColumn::make('stok_toko')

@@ -19,7 +19,6 @@
 
         .header { text-align: center; margin-bottom: 50px; border-bottom: 2px solid #d4af37; padding-bottom: 20px; }
 
-        /* LOGO STYLING */
         .logo { width: 120px; height: auto; margin-bottom: 15px; }
 
         .header h1 {

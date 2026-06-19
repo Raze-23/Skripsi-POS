@@ -34,7 +34,6 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->font('Inter')
             ->sidebarCollapsibleOnDesktop()
-            ->spa()
             ->brandName('CV. HERBAL AT-TIIN')
             ->brandLogo(asset('images/logo-attiin.png'))
             ->brandLogoHeight('5rem')

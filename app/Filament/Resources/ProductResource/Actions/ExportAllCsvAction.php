@@ -16,16 +16,10 @@ class ExportCsvAllAction
             ->action(function () {
                 return response()->streamDownload(function () {
                     $file = fopen('php://output', 'w');
-
-                    // TAMBAHKAN BOM (Byte Order Mark) agar karakter khusus/UTF-8 terbaca sempurna di Excel
                     fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-                    // UBAH: Tambahkan parameter ';' di akhir
                     fputcsv($file, ['ID', 'SKU', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa'], ';');
-
                     Product::chunk(100, function ($products) use ($file) {
                         foreach ($products as $p) {
-                            // UBAH: Tambahkan parameter ';' di akhir
                             fputcsv($file, [
                                 $p->id,
                                 $p->sku,
