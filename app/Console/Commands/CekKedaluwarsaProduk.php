@@ -50,7 +50,6 @@ class CekKedaluwarsaProduk extends Command
             ->get();
         foreach ($produkMitraKritis as $produk) {
             foreach ($produk->consignmentStocks as $titipan) {
-                // Pastikan barang di apotek tersebut masih ada
                 if ($titipan->stok_titipan > 0) {
                     Notification::make()
                         ->warning()
@@ -60,6 +59,17 @@ class CekKedaluwarsaProduk extends Command
                         ->sendToDatabase($admin);
                 }
             }
+        }
+
+        // 3. FITUR BARU: CEK STOK HABIS (0 PCS) DI GUDANG UTAMA
+        $produkHabis = Product::where('stok_toko', 0)->get();
+        foreach ($produkHabis as $produk) {
+            Notification::make()
+                ->danger()
+                ->icon('heroicon-o-x-circle')
+                ->title("Stok Habis: {$produk->nama}")
+                ->body("Stok produk herbal {$produk->nama} di toko telah habis. Segera lakukan produksi atau pengadaan ulang!")
+                ->sendToDatabase($admin);
         }
         $this->info('Pemeriksaan kedaluwarsa selesai dilakukan.');
     }
