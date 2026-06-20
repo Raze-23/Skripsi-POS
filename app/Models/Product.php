@@ -27,6 +27,9 @@ class Product extends Model
         });
     }
 
+    public function productDisposals(){
+        return $this->hasMany(ProductDisposal::class);
+    }
     public function consignmentStocks()
     {
         return $this->hasMany(ConsignmentStock::class);

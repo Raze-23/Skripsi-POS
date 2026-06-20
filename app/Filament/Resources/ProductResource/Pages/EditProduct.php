@@ -27,6 +27,11 @@ class EditProduct extends EditRecord
         return $this->getResource()::getUrl('index');
     }
 
+    public function hasCombinedRelationManagerTabsWithContent(): bool
+    {
+        return true;
+    }
+
     protected function getSavedNotification(): ?Notification
     {
         return Notification::make()

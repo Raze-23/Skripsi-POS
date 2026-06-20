@@ -8,6 +8,7 @@ use App\Filament\Resources\ProductResource\Actions\ExportCsvSelectedBulkAction;
 use App\Filament\Resources\ProductResource\Actions\ExportPdfAction;
 use App\Filament\Resources\ProductResource\Actions\GenerateBarcodeAllAction;
 use App\Filament\Resources\ProductResource\Pages;
+use App\Filament\Resources\ProductResource\RelationManagers\ProductDisposalsRelationManager;
 use App\Models\Product;
 use Carbon\Carbon;
 use Filament\Forms;
@@ -151,7 +152,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ProductDisposalsRelationManager::class,
         ];
     }
 

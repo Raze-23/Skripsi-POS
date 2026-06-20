@@ -79,13 +79,11 @@ class ConsignmentReturnsRelationManager extends RelationManager
                                     ->numeric()
                                     ->minValue(0)
                                     ->required(),
-
                                 Forms\Components\TextInput::make('qty_layak')
                                     ->label('Sisa Layak Jual')
                                     ->numeric()
                                     ->minValue(0)
                                     ->required(),
-
                                 Forms\Components\TextInput::make('qty_rusak')
                                     ->label('Barang Rusak')
                                     ->numeric()
