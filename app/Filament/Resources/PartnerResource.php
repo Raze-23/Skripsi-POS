@@ -4,6 +4,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Clusters\Stock;
 use App\Filament\Resources\PartnerResource\Pages;
+use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentReturnsRelationManager;
+use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentStocksRelationManager;
 use App\Models\Partner;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -87,7 +89,8 @@ class PartnerResource extends Resource
                     ->copyable()
                     ->color('gray'),
                 Tables\Columns\TextColumn::make('alamat')
-                    ->label('alamat'),
+                    ->label('Alamat')
+                    ->searchable(),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('Status')
                     ->boolean()
@@ -112,7 +115,8 @@ class PartnerResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ConsignmentStocksRelationManager::class,
+            ConsignmentReturnsRelationManager::class,
         ];
     }
 
@@ -123,5 +127,20 @@ class PartnerResource extends Resource
             'create' => Pages\CreatePartner::route('/create'),
             'edit' => Pages\EditPartner::route('/{record}/edit'),
         ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $jumlahKritis = \App\Models\Product::where('stok_toko', '>', 0)
+            ->whereNotNull('tanggal_kedaluwarsa')
+            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(7))
+            ->count();
+
+        return $jumlahKritis > 0 ? (string) $jumlahKritis : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'danger';
     }
 }

@@ -11,11 +11,13 @@ class CreatePartner extends CreateRecord
 {
     protected static string $resource = PartnerResource::class;
 
+        protected static ?string $title = 'Tambah Apotek Mitra';
+
     #[Override]
     protected function getFormActions(): array
     {
         return [
-            $this->getCreateAnotherFormAction()
+            $this->getCreateFormAction()
                 ->label('Simpan Apotek')
                 ->icon('heroicon-o-check-circle')
                 ->color('primary'),
@@ -39,5 +41,5 @@ class CreatePartner extends CreateRecord
             ->body('Data apotek berhasil ditambahkan dan disimpan.');
     }
 
-    
+
 }

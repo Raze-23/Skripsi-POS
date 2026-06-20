@@ -4,10 +4,16 @@ namespace App\Policies;
 
 use App\Models\ConsignmentReturn;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class ConsignmentReturnPolicy
 {
+    public function before (User $user, string $ability)
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+        return null;
+    }
     /**
      * Determine whether the user can view any models.
      */

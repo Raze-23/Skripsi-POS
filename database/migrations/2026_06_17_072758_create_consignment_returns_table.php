@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('partner_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->integer('terjual');
             $table->integer('qty_layak')->default(0);
             $table->integer('qty_rusak')->default(0);
             $table->timestamps();

@@ -4,10 +4,16 @@ namespace App\Policies;
 
 use App\Models\ConsignmentStock;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class ConsignmentStockPolicy
 {
+    public function before(User $user, string $ability) : bool|null
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+        return null;
+    }
     /**
      * Determine whether the user can view any models.
      */

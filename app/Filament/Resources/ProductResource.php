@@ -163,4 +163,19 @@ class ProductResource extends Resource
             'edit' => Pages\EditProduct::route('/{record}/edit'),
         ];
     }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $jumlahKritis = \App\Models\Product::where('stok_toko', '>', 0)
+            ->whereNotNull('tanggal_kedaluwarsa')
+            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30))
+            ->count();
+
+        return $jumlahKritis > 0 ? (string) $jumlahKritis : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'danger';
+    }
 }

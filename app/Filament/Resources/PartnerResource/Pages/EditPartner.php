@@ -11,13 +11,32 @@ class EditPartner extends EditRecord
 {
     protected static string $resource = PartnerResource::class;
 
+    protected static ?string $title = 'Ubah Informasi Apotek';
+
     protected function getHeaderActions(): array
     {
         return [
             Actions\DeleteAction::make(),
         ];
     }
-        protected function getRedirectUrl(): ?string
+    public function getTitle(): string
+    {
+        // Akan menghasilkan contoh: "Kelola: Apotek Sehat"
+        return "Kelola {$this->record->nama_apotek}";
+    }
+
+    public function getHeading(): string
+    {
+        // Sama, untuk judul besar di dalam halaman
+        return "{$this->record->nama_apotek}";
+    }
+
+    public function hasCombinedRelationManagerTabsWithContent(): bool
+    {
+        return true;
+    }
+
+    protected function getRedirectUrl(): ?string
     {
         return $this->getResource()::getUrl('index');
     }
@@ -36,7 +55,6 @@ class EditPartner extends EditRecord
             $this->getSaveFormAction()
                 ->label('Simpan Perubahan')
                 ->icon('heroicon-o-check-circle'),
-
             $this->getCancelFormAction()
                 ->label('Kembali')
                 ->color('gray'),

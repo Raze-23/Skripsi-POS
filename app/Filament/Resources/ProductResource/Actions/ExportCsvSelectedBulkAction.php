@@ -17,7 +17,6 @@ class ExportCsvSelectedBulkAction
                 return response()->streamDownload(function () use ($records) {
                     $file = fopen('php://output', 'w');
                     fputcsv($file, ['ID', 'SKU', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa']);
-
                     foreach ($records as $p) {
                         fputcsv($file, [$p->id, $p->sku, $p->nama, $p->harga_beli, $p->harga_jual, $p->stok_toko, $p->tanggal_kedaluwarsa->format('d-m-Y')]);
                     }
