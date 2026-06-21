@@ -8,10 +8,9 @@ use Filament\Notifications\Notification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
-class CekKedaluwarsaProduk extends Command
+class CekProduk extends Command
 {
-    protected $signature = 'app:cek-kedaluwarsa';
-    protected $description = 'Peringatan dini otomatis untuk produk kedaluwarsa di toko dan mitra';
+    protected $signature = 'app:cek-produk';
 
     public function handle()
     {
@@ -35,7 +34,7 @@ class CekKedaluwarsaProduk extends Command
                 ->danger()
                 ->icon('heroicon-o-exclamation-triangle')
                 ->title("Bahaya Gudang: {$produk->nama}")
-                ->body("Terdapat {$produk->stok_toko} pcs di stok toko utama yang mendekati kedaluwarsa ({$status}). Segera periksa fisik barang!")
+                ->body("Terdapat {$produk->stok_toko} pcs di stok toko yang mendekati kedaluwarsa ({$status}). Segera periksa barang!")
                 ->sendToDatabase($admin);
         }
 
@@ -55,7 +54,7 @@ class CekKedaluwarsaProduk extends Command
                         ->warning()
                         ->icon('heroicon-o-truck')
                         ->title("Tarik Barang dari {$titipan->partner->nama_apotek}")
-                        ->body("Produk {$produk->nama} sebanyak {$titipan->stok_titipan} pcs di apotek ini mendekati masa kedaluwarsa (Tgl: " . Carbon::parse($produk->tanggal_kedaluwarsa)->format('d M Y') . "). Lakukan penarikan secepatnya!")
+                        ->body("Produk {$produk->nama} sebanyak {$titipan->stok_titipan} pcs di apotek ini mendekati masa kedaluwarsa (Tgl: " . Carbon::parse($produk->tanggal_kedaluwarsa)->format('d M Y') . "). Segera lakukan penarikan!")
                         ->sendToDatabase($admin);
                 }
             }
@@ -68,7 +67,7 @@ class CekKedaluwarsaProduk extends Command
                 ->danger()
                 ->icon('heroicon-o-x-circle')
                 ->title("Stok Habis: {$produk->nama}")
-                ->body("Stok produk herbal {$produk->nama} di toko telah habis. Segera lakukan produksi atau pengadaan ulang!")
+                ->body("Stok produk herbal {$produk->nama} di toko telah habis. Segera lakukan produksi!")
                 ->sendToDatabase($admin);
         }
         $this->info('Pemeriksaan kedaluwarsa selesai dilakukan.');
