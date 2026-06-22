@@ -1,4 +1,4 @@
-<div id="barcode-scanner-modal">
+<div id="barcode-scanner-modal" wire:ignore.self>
     <div class="scanner-overlay-backdrop" onclick="closeBarcodeScanner()"></div>
     <div class="scanner-panel-wrap">
         <div class="scanner-panel">
@@ -18,11 +18,11 @@
                     </svg>
                 </button>
             </div>
-            <div style="padding:12px;background:#000;">
+            <div style="padding:12px;background:#000;min-height:250px;" wire:ignore>
                 <div id="barcode-reader"></div>
             </div>
             <div style="padding:10px 16px;text-align:center;background:#fff;border-top:1px solid #f3f4f6;">
-                <p style="font-size:11.5px;color:#6b7280;margin:0;">Arahkan kamera ke barcode produk</p>
+                <p style="font-size:11.5px;color:#6b7280;margin:0;">Arahkan kamera ke QR Code produk</p>
             </div>
         </div>
     </div>

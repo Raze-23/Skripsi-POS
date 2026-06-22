@@ -49,6 +49,20 @@ class TopProductsChart extends ChartWidget
         ];
     }
 
+    protected function getOptions(): array
+    {
+        return [
+            'scales' => [
+                'x' => [
+                    'display' => false,
+                ],
+                'y' => [
+                    'display' => false,
+                ],
+            ],
+        ];
+    }
+
     protected function getType(): string
     {
         return 'doughnut'; 

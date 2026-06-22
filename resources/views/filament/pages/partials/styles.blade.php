@@ -938,4 +938,44 @@
             transform: translateY(0);
         }
     }
+
+    /* ─── Scan Flash Overlay (visual feedback saat QR terdeteksi) ── */
+    #scan-flash-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 99998;
+        background: rgba(5, 150, 105, 0.25);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+
+    #scan-flash-overlay.active {
+        opacity: 1;
+        animation: scanFlash 0.35s ease-out forwards;
+    }
+
+    @keyframes scanFlash {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    /* ─── Scanner laser line ──────────────────────────────── */
+    #barcode-reader__scan_region::after {
+        content: '';
+        position: absolute;
+        left: 10%;
+        right: 10%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #059669, #34d399, #059669, transparent);
+        box-shadow: 0 0 8px rgba(5, 150, 105, 0.6);
+        animation: scanLine 2s ease-in-out infinite;
+        z-index: 10;
+        border-radius: 2px;
+    }
+
+    @keyframes scanLine {
+        0%, 100% { top: 20%; }
+        50% { top: 80%; }
+    }
 </style>

@@ -10,6 +10,7 @@ use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On; // TAMBAHAN: Wajib diimpor agar bisa mendengar sinyal JS
 
 class Cashier extends Page
 {
@@ -70,36 +71,59 @@ class Cashier extends Page
         return $uangBayar - $this->total_harga;
     }
 
-    public function scanBarcode()
+    // TAMBAHAN: Telinga untuk menangkap hasil scan dari kamera QR Code
+    #[On('process-barcode')]
+    public function scanBarcode($sku = null)
     {
-        $sku = trim($this->search);
-        if (empty($sku)) return;
+        $skuTarget = trim($sku ?? $this->search);
+        if (empty($skuTarget)) return;
 
-        $product = Product::where('sku', $sku)->first();
+        // Cari produk berdasarkan SKU (exact match)
+        $product = Product::where('sku', $skuTarget)->first();
+
+        // Fallback: cari dengan LIKE jika exact match gagal (misal ada spasi/newline dari scanner)
+        if (!$product) {
+            $product = Product::where('sku', 'like', '%' . $skuTarget . '%')->first();
+        }
 
         if (!$product) {
-            $this->dispatch('stock-warning', [['name' => 'SKU tidak ditemukan di database']]);
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => 'SKU ' . $skuTarget . ' tidak ditemukan']]);
             $this->search = '';
             return;
         }
 
-        $this->addToCart($product->id);
+        // addToCart sekarang return boolean agar tahu berhasil atau tidak
+        $added = $this->addToCart($product->id);
+
+        if ($added) {
+            $this->dispatch('product-added', [['name' => $product->nama]]);
+        }
+
         $this->search = '';
     }
 
-    public function addToCart($productId)
+    public function addToCart($productId): bool
     {
         $product = Product::find($productId);
 
-        if (!$product || $product->stok_toko <= 0) {
-            $this->dispatch('stock-warning', [['name' => $product->nama ?? 'Produk']]);
-            return;
+        if (!$product) {
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => 'Produk tidak ditemukan']]);
+            return false;
+        }
+
+        if ($product->stok_toko <= 0) {
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => $product->nama . ' (STOK HABIS)']]);
+            return false;
         }
 
         if (isset($this->cart[$product->id])) {
             if ($this->cart[$product->id]['qty'] >= $product->stok_toko) {
-                $this->dispatch('stock-warning', [['name' => $product->nama]]);
-                return;
+                $this->dispatch('play-error-beep');
+                $this->dispatch('stock-warning', [['name' => $product->nama . ' (melebihi stok)']]);
+                return false;
             }
             $this->cart[$product->id]['qty']++;
             $this->cart[$product->id]['subtotal'] = $this->cart[$product->id]['qty'] * $this->cart[$product->id]['harga'];
@@ -115,7 +139,13 @@ class Cashier extends Page
         }
 
         $this->dispatch('play-beep');
-        $this->dispatch('product-added', [['name' => $product->nama]]);
+        Notification::make()
+            ->title('Masuk Keranjang!')
+            ->body($product->nama . ' berhasil ditambahkan.')
+            ->success()
+            ->send();
+
+        return true;
     }
 
     public function updateQty($productId, $newQty)
@@ -191,6 +221,8 @@ class Cashier extends Page
         $this->showReceiptModal = true;
     }
 
+    // TAMBAHAN: Telinga untuk menangkap sinyal tombol "Esc" atau cetak nota dari Javascript
+    #[On('close-receipt')]
     public function closeReceiptModal()
     {
         $this->showReceiptModal = false;

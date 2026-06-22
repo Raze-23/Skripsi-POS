@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Lembar Barcode Produk - CV. Herbal At-Tiin</title>
+    <title>Lembar QR Code Produk - CV. Herbal At-Tiin</title>
     <style>
         @page { size: A4; margin: 15mm 15mm 25mm 15mm; }
         body {
@@ -25,17 +25,18 @@
         .logo { width: 110px; height: auto; margin-bottom: 12px; }
         .header h2 { font-size: 24px; font-weight: 300; margin: 0 0 5px 0; letter-spacing: 5px; text-transform: uppercase; color: #065f46; }
         .header p { font-size: 11px; color: #d4af37; text-transform: uppercase; letter-spacing: 2px; margin: 0; }
+
         .grid-table {
             width: 100%;
             border-collapse: separate;
-            border-spacing: 12px; /* Jarak rapi antar kotak */
-            table-layout: fixed; /* Memaksa 3 kolom memiliki lebar yang sama persis */
+            border-spacing: 12px;
+            table-layout: fixed;
         }
         .grid-td {
             width: 33.33%;
             vertical-align: top;
         }
-        .barcode-card {
+        .qrcode-card {
             padding: 12px 8px;
             border: 1px solid #e2e8f0;
             border-top: 4px solid #065f46;
@@ -44,12 +45,40 @@
             background-color: #fafafa;
             page-break-inside: avoid;
         }
-        .prod-name { font-size: 10px; font-weight: bold; margin-bottom: 10px; height: 28px; overflow: hidden; text-transform: uppercase; color: #065f46; line-height: 1.4; font-family: 'Arial', sans-serif; }
-        .barcode-box { margin: 5px auto; display: block; background: #fff; padding: 6px; border: 1px solid #eee; border-radius: 4px; }
+        .prod-name {
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            height: 28px;
+            overflow: hidden;
+            text-transform: uppercase;
+            color: #065f46;
+            line-height: 1.4;
+            font-family: 'Arial', sans-serif;
+        }
+        .qrcode-box {
+            margin: 5px auto;
+            display: block;
+            background: #fff;
+            padding: 8px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+        }
 
-        .barcode-box img { max-width: 100%; height: 38px; }
+        /* PERUBAHAN UTAMA: Ukuran dibuat persegi agar QR Code tidak gepeng */
+        .qrcode-box img {
+            width: 90px;
+            height: 90px;
+        }
 
-        .sku-text { font-size: 11px; color: #d4af37; margin-top: 8px; letter-spacing: 2.5px; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+        .sku-text {
+            font-size: 11px;
+            color: #d4af37;
+            margin-top: 8px;
+            letter-spacing: 2.5px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -70,30 +99,28 @@
             @if($logoData)
                 <img src="data:image/png;base64,{{ $logoData }}" class="logo" alt="Logo At-Tiin">
             @endif
-            <h2>Label Barcode</h2>
+            <h2>Label QR Code</h2>
         </div>
 
         <table class="grid-table">
-            @php
-                $generator = new Picqer\Barcode\BarcodeGeneratorPNG();
-            @endphp
             @foreach($products->chunk(3) as $row)
                 <tr>
                     @foreach($row as $product)
                         <td class="grid-td">
-                            <div class="barcode-card">
+                            <div class="qrcode-card">
                                 <div class="prod-name">{{ Str::limit($product->nama, 35) }}</div>
-                                <div class="barcode-box">
+                                <div class="qrcode-box">
                                     @php
-                                        // Skala diturunkan sedikit dari 1.5 menjadi 1.2 agar aman untuk SKU yang sangat panjang
-                                        $barcodeData = base64_encode($generator->getBarcode($product->sku, $generator::TYPE_CODE_128, 1.2, 38));
+                                        // PERUBAHAN UTAMA: Memanggil library Simple QrCode dan mengonversinya ke Base64 SVG
+                                        $qrCodeData = base64_encode(QrCode::size(90)->generate($product->sku));
                                     @endphp
-                                    <img src="data:image/png;base64,{{ $barcodeData }}" alt="Barcode {{ $product->sku }}">
+                                    <img src="data:image/svg+xml;base64,{{ $qrCodeData }}" alt="QR Code {{ $product->sku }}">
                                 </div>
                                 <div class="sku-text">{{ $product->sku }}</div>
                             </div>
                         </td>
                     @endforeach
+
                     @for($i = $row->count(); $i < 3; $i++)
                         <td class="grid-td"></td>
                     @endfor

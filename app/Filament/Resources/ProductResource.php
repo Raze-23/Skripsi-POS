@@ -6,7 +6,7 @@ use App\Filament\Clusters\Stock;
 use App\Filament\Resources\ProductResource\Actions\ExportCsvAllAction;
 use App\Filament\Resources\ProductResource\Actions\ExportCsvSelectedBulkAction;
 use App\Filament\Resources\ProductResource\Actions\ExportPdfAction;
-use App\Filament\Resources\ProductResource\Actions\GenerateBarcodeAllAction;
+use App\Filament\Resources\ProductResource\Actions\GenerateQRCodeAllAction;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Filament\Resources\ProductResource\RelationManagers\ProductDisposalsRelationManager;
 use App\Models\Product;
@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\HtmlString;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class ProductResource extends Resource
 {
@@ -96,17 +97,30 @@ class ProductResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('foto')->circular()
                     ->default(asset('images/notfound.png')),
-                Tables\Columns\TextColumn::make('sku')->searchable()->sortable(),
+
+                Tables\Columns\TextColumn::make('sku')
+                    ->label('QR Code & SKU')
+                    ->formatStateUsing(function (string $state) {
+                        $qr = QrCode::size(50)->generate($state);
+                        return new HtmlString('<div style="display:flex; flex-direction:column; align-items:center; gap:5px; padding-top: 5px;">' . $qr . '<span style="font-size: 11px; font-family: monospace;">' . $state . '</span></div>');
+                    })
+                    ->alignCenter()
+                    ->searchable()
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('nama')->searchable(),
+
                 Tables\Columns\TextColumn::make('stok_toko')
                     ->label('Stok')
                     ->badge()
                     ->color(fn(int $state): string => $state < 10 ? 'danger' : 'success')
                     ->sortable(),
+
                 Tables\Columns\TextColumn::make('tanggal_kedaluwarsa')
                     ->date('d M Y')
                     ->badge()
                     ->color(function ($state): string {
+                        if (!$state) return 'gray';
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
                         return match (true) {
                             $daysLeft < 7  => 'danger',
@@ -116,6 +130,7 @@ class ProductResource extends Resource
                         };
                     })
                     ->icon(function ($state): string {
+                        if (!$state) return 'heroicon-o-minus';
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
                         return match (true) {
                             $daysLeft < 7  => 'heroicon-o-x-circle',
@@ -139,7 +154,7 @@ class ProductResource extends Resource
             ->headerActions([
                 ExportCsvAllAction::make(),
                 ExportPdfAction::make(),
-                GenerateBarcodeAllAction::make(),
+                GenerateQRCodeAllAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
