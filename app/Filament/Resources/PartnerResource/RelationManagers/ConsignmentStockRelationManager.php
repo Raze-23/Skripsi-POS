@@ -122,7 +122,6 @@ class ConsignmentStocksRelationManager extends RelationManager
                                     ->minValue(0)
                                     ->required(),
                                 Forms\Components\TextInput::make('qty_rusak')
-                                    // Mengubah nama kolom ketiga
                                     ->label('Barang Rusak')
                                     ->helperText('Dibuang')
                                     ->numeric()

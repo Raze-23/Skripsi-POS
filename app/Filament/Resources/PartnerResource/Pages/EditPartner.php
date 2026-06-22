@@ -19,15 +19,14 @@ class EditPartner extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
     public function getTitle(): string
     {
-        // Akan menghasilkan contoh: "Kelola: Apotek Sehat"
         return "Kelola {$this->record->nama_apotek}";
     }
 
     public function getHeading(): string
     {
-        // Sama, untuk judul besar di dalam halaman
         return "{$this->record->nama_apotek}";
     }
 

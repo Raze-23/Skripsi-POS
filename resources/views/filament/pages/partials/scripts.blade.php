@@ -1,9 +1,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-{{-- AUDIO BEEP ELEMEN --}}
 
 <audio id="beep-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"></audio>
 
-{{-- Toast notification --}}
 <div id="pos-toast" role="alert" aria-live="assertive">
     <svg class="toast-icon" id="toast-icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
         stroke-width="2.5"></svg>
@@ -24,10 +22,7 @@
                             facingMode: "environment"
                         }, {
                             fps: 10,
-                            qrbox: {
-                                width: 220,
-                                height: 120
-                            },
+                            qrbox: { width: 220, height: 120 },
                             aspectRatio: 1.2,
                             formatsToSupport: [
                                 Html5QrcodeSupportedFormats.EAN_13,
@@ -75,7 +70,6 @@
         }
     }
 
-    // Toast notification
     let toastTimer = null;
 
     function showToast(msg, type = 'success') {
@@ -99,38 +93,31 @@
         }, 3200);
     }
 
-    //  Livewire event listeners (BEEP SOUND)
     document.addEventListener('livewire:initialized', () => {
         Livewire.on('play-beep', () => {
             const beepSound = document.getElementById('beep-sound');
-            beepSound.currentTime = 0; // Reset agar bisa diputar berulang cepat
-            beepSound.play().catch((err) => {
-                console.log("Audio autoplay dicegah browser. Harap klik sekali pada halaman.");
-            });
+            beepSound.currentTime = 0;
+            beepSound.play().catch(() => {});
         });
 
-        // 1. Lebih singkat: "Paracetamol ditambahkan."
         Livewire.on('product-added', (data) => {
             showToast((data[0]?.name ?? 'Produk') + ' ditambahkan.', 'success');
         });
 
-        // 2. Lebih netral: "Keranjang dibersihkan."
         Livewire.on('cart-cleared', () => {
             showToast('Keranjang dibersihkan.', 'warn');
         });
 
-        // 3. Lebih profesional tanpa tanda seru: "Pembayaran selesai."
         Livewire.on('transaction-success', () => {
             showToast('Pembayaran selesai.', 'success');
         });
 
-        // 4. Lebih informatif & diubah menjadi warna merah (error): "Stok Paracetamol tidak mencukupi."
         Livewire.on('stock-warning', (data) => {
             let productName = data[0]?.name ? ' ' + data[0].name : '';
             showToast('Stok' + productName + ' tidak mencukupi.', 'error');
         });
     });
-    
+
     function jalankanCetakNota(transactionId) {
         if (!transactionId) return;
 
@@ -142,33 +129,24 @@
         const iframe = document.createElement('iframe');
         iframe.id = 'frame-cetak-nota';
         iframe.src = urlNota;
-        // Menggunakan visibility:hidden seringkali lebih ramah untuk fungsi print browser
-        iframe.style.cssText =
-            'position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; border:none; visibility:hidden;';
+        iframe.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; border:none; visibility:hidden;';
 
         document.body.appendChild(iframe);
 
         iframe.addEventListener('load', () => {
             try {
-                // 1. Fokuskan ke dalam iframe
                 iframe.contentWindow.focus();
-
-                // 2. PERBAIKAN: Paksa eksekusi perintah cetak dari halaman induk
                 iframe.contentWindow.print();
-
-                // 3. PERBAIKAN: Beri jeda 0.5 detik sebelum Livewire merender ulang (menutup modal)
-                // agar sistem peramban web memiliki waktu untuk memunculkan dialog print.
                 setTimeout(() => {
                     @this.call('closeReceiptModal');
                 }, 500);
-
             } catch (e) {
-                console.warn('Iframe print terblokir browser, membuka jendela pop-up cadangan:', e);
                 window.open(urlNota, '_blank', 'width=420,height=600');
                 @this.call('closeReceiptModal');
             }
         });
     }
+
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' || e.key === 'Esc') {
             @this.call('closeReceiptModal');

@@ -3,6 +3,7 @@
 namespace App\Filament\Clusters;
 
 use Filament\Clusters\Cluster;
+use Illuminate\Support\Facades\Auth;
 
 class Sales extends Cluster
 {
@@ -13,4 +14,10 @@ class Sales extends Cluster
     protected static ?int $navigationSort = 1;
 
     protected static ?string $clusterBreadcrumb = 'Kasir';
+
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        return $user && in_array($user->role, ['admin', 'kasir']);
+    }
 }

@@ -29,7 +29,7 @@ class Cashier extends Page
 
     public $diskon = 0;
 
-    public $bayar = null; // Pakai null agar placeholder '0' di form bisa muncul
+    public $bayar = null;
 
     public bool $showReceiptModal = false;
 
@@ -37,31 +37,24 @@ class Cashier extends Page
 
     public int $kembalianAkhir = 0;
 
-    // =======================================================
-    // COMPUTED PROPERTIES (Kalkulasi Real-Time Otomatis Livewire)
-    // =======================================================
-
-    // 1. Menampilkan daftar produk di grid kiri (Bisa dicari via SKU atau Nama)
     #[Computed]
     public function products()
     {
-            return Product::query() // HAPUS where('stok_toko', '>', 0)
-                ->when($this->search, function ($query) {
-                    $query->where('nama', 'like', '%' . $this->search . '%')
-                        ->orWhere('sku', 'like', '%' . $this->search . '%');
-                })
-                ->limit(12)
-                ->get();
+        return Product::query()
+            ->when($this->search, function ($query) {
+                $query->where('nama', 'like', '%' . $this->search . '%')
+                    ->orWhere('sku', 'like', '%' . $this->search . '%');
+            })
+            ->limit(12)
+            ->get();
     }
 
-    // 2. Menghitung subtotal keranjang murni
     #[Computed]
     public function subtotal_cart()
     {
         return collect($this->cart)->sum('subtotal');
     }
 
-    // 3. Menghitung tagihan akhir setelah dipotong diskon persen
     #[Computed]
     public function total_harga()
     {
@@ -70,7 +63,6 @@ class Cashier extends Page
         return max(0, $subtotal - $diskonNominal);
     }
 
-    // 4. Menghitung kembalian atau status minus (kekurangan uang)
     #[Computed]
     public function kembalian()
     {
@@ -78,11 +70,6 @@ class Cashier extends Page
         return $uangBayar - $this->total_harga;
     }
 
-    // =======================================================
-    // FUNGSI AKSI KASIR
-    // =======================================================
-
-    // Menangkap input dari Scanner Barcode (dieksekusi saat tombol Enter otomatis tertekan)
     public function scanBarcode()
     {
         $sku = trim($this->search);
@@ -97,21 +84,18 @@ class Cashier extends Page
         }
 
         $this->addToCart($product->id);
-        $this->search = ''; // Kosongkan lagi form scanner agar siap memindai barang berikutnya
+        $this->search = '';
     }
 
-    // Memasukkan barang ke keranjang
     public function addToCart($productId)
     {
         $product = Product::find($productId);
 
-        // Cek ketersediaan stok
         if (!$product || $product->stok_toko <= 0) {
             $this->dispatch('stock-warning', [['name' => $product->nama ?? 'Produk']]);
             return;
         }
 
-        // Jika sudah ada di keranjang, tambah Qty-nya
         if (isset($this->cart[$product->id])) {
             if ($this->cart[$product->id]['qty'] >= $product->stok_toko) {
                 $this->dispatch('stock-warning', [['name' => $product->nama]]);
@@ -120,7 +104,6 @@ class Cashier extends Page
             $this->cart[$product->id]['qty']++;
             $this->cart[$product->id]['subtotal'] = $this->cart[$product->id]['qty'] * $this->cart[$product->id]['harga'];
         } else {
-            // Jika produk baru
             $this->cart[$product->id] = [
                 'id' => $product->id,
                 'sku' => $product->sku,
@@ -131,17 +114,15 @@ class Cashier extends Page
             ];
         }
 
-        // Panggil efek suara "Tiiit" dan Notifikasi Toast
         $this->dispatch('play-beep');
         $this->dispatch('product-added', [['name' => $product->nama]]);
     }
 
-    // Tambah/Kurang Qty Manual via tombol (+) dan (-) di keranjang
     public function updateQty($productId, $newQty)
     {
         $newQty = (int) $newQty;
         if ($newQty <= 0) {
-            $this->removeItem($productId); // <-- PERBAIKAN DI SINI
+            $this->removeItem($productId);
             return;
         }
 
@@ -168,31 +149,30 @@ class Cashier extends Page
         $this->dispatch('cart-cleared');
     }
 
-    // =======================================================
-    // EKSEKUSI PEMBAYARAN KE DATABASE
-    // =======================================================
     public function submitTransaction()
     {
         if (empty($this->cart)) {
             return;
         }
+
         $uangBayar = (int) $this->bayar ?: 0;
         if ($uangBayar < $this->total_harga) {
             Notification::make()->danger()->title('Uang Pembayaran Kurang!')->send();
             return;
         }
-        // 1. BEKUKAN ANGKA KEMBALIAN SEBELUM KERANJANG DIHANCURKAN
+
         $this->kembalianAkhir = max(0, $uangBayar - $this->total_harga);
-        // 2. SIMPAN KE DATABASE
+
         DB::transaction(function () use ($uangBayar) {
             $transaction = Transaction::create([
                 'kasir_id' => Auth::id(),
                 'total_harga' => $this->total_harga,
                 'diskon_persen' => (int) $this->diskon ?: 0,
                 'nominal_bayar' => $uangBayar,
-                'nominal_kembalian' => $this->kembalianAkhir, // Gunakan angka yang dibekukan
+                'nominal_kembalian' => $this->kembalianAkhir,
                 'status' => 'Selesai',
             ]);
+
             foreach ($this->cart as $item) {
                 $transaction->details()->create([
                     'product_id' => $item['id'],
@@ -205,10 +185,12 @@ class Cashier extends Page
 
             $this->lastTransactionId = $transaction->id;
         });
+
         $this->resetCart();
         $this->dispatch('transaction-success');
         $this->showReceiptModal = true;
     }
+
     public function closeReceiptModal()
     {
         $this->showReceiptModal = false;

@@ -7,9 +7,6 @@ use Illuminate\Validation\ValidationException;
 
 class Login extends BaseAuthLogin
 {
-    /**
-     * Override method bawaan untuk mengubah pesan error validasi
-     */
     protected function throwFailureValidationException(): never
     {
         throw ValidationException::withMessages([

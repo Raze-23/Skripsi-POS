@@ -80,9 +80,8 @@ class TransactionResource extends Resource
             ->filters([
                 SelectFilter::make('kasir_id')
                     ->relationship('kasir', 'name')
-                    ->label('Pilih Kasir'),
+                    ->label('Yang melayani transaksi'),
 
-                // Filter Transaksi Hari Ini
                 Filter::make('hari_ini')
                     ->label('Transaksi Hari Ini')
                     ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today())),
@@ -91,15 +90,29 @@ class TransactionResource extends Resource
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Rincian')
-                        ->color('info'),
-                    // Tombol Cetak Nota (Buka tab baru)
+                        ->color('info')
+                        ->modalCancelAction(fn (\Filament\Actions\StaticAction $action) => $action->color('danger')->label('Tutup')),
+                        
                     Action::make('cetak')
                         ->label('Cetak Nota')
                         ->icon('heroicon-o-printer')
                         ->color('success')
-                        ->url(fn (Transaction $record) => route('print.nota', $record->id))
-                        ->openUrlInNewTab(),
-                    Tables\Actions\Action::make('batalkan')
+                        ->action(function (Transaction $record, $livewire) {
+                            $url = route('print.nota', $record->id);
+                            $livewire->js("
+                                (function() {
+                                    var oldFrame = document.getElementById('frame-cetak-nota-riwayat');
+                                    if (oldFrame) oldFrame.remove();
+                                    var iframe = document.createElement('iframe');
+                                    iframe.id = 'frame-cetak-nota-riwayat';
+                                    iframe.src = '{$url}';
+                                    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;visibility:hidden;';
+                                    document.body.appendChild(iframe);
+                                })();
+                            ");
+                        }),
+
+                    Action::make('batalkan')
                         ->label('Batalkan')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
@@ -107,15 +120,17 @@ class TransactionResource extends Resource
                         ->modalHeading('Batalkan Transaksi?')
                         ->modalDescription('Apakah Anda yakin ingin membatalkan transaksi ini? Stok produk akan dikembalikan otomatis ke toko.')
                         ->modalSubmitActionLabel('Ya, Batalkan')
-                        ->hidden(fn (Transaction $record) => $record->status === 'Batal')
+                        ->authorize('cancel')
+                        ->visible(fn (?Transaction $record) => $record !== null && $record->status !== 'Batal')
                         ->action(function (Transaction $record) {
                             DB::transaction(function () use ($record) {
-                                // 1. Ubah status jadi Batal
-                                $record->update(['status' => 'Batal']);
+                                $record->status = 'Batal';
+                                $record->save();
 
-                                // 2. Kembalikan stok ke tabel produk
                                 foreach ($record->details as $item) {
-                                    $item->product->increment('stok_toko', $item->qty);
+                                    if ($item->product) {
+                                        $item->product->increment('stok_toko', $item->qty);
+                                    }
                                 }
                             });
                             Notification::make()
@@ -123,14 +138,13 @@ class TransactionResource extends Resource
                                 ->body('Status diubah menjadi Batal dan stok telah dikembalikan.')
                                 ->success()
                                 ->send();
-                    }),
+                        }),
                 ]),
             ])
             ->bulkActions([
-                // Matikan fitur hapus massal untuk keamanan data keuangan
+                //
             ]);}
 
-    // 2. DESAIN INFOLIST (Tampilan Saat Tombol "Rincian" Diklik)
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -158,7 +172,6 @@ class TransactionResource extends Resource
                 Section::make('Daftar Pembelian')
                     ->icon('heroicon-o-shopping-bag')
                     ->schema([
-                        // Menampilkan relasi detail produk dengan sangat rapi tanpa tabel terpisah
                         RepeatableEntry::make('details')
                             ->label('')
                             ->schema([
@@ -201,16 +214,13 @@ class TransactionResource extends Resource
             ]);
     }
 
-    // 3. PENGATURAN HALAMAN
     public static function getPages(): array
     {
         return [
-            // Kita hanya butuh halaman List. Halaman Create/Edit dimatikan.
             'index' => Pages\ListTransactions::route('/'),
         ];
     }
 
-    // 4. PENGAMANAN DATA: Matikan Tombol Buat Baru (Transaksi hanya lewat POS)
     public static function canCreate(): bool
     {
         return false;

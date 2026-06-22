@@ -2,43 +2,66 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Product; // Wajib di-import untuk mengambil data modal
+use App\Models\Product;
 use App\Models\Transaction;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Support\Facades\DB; // Wajib di-import untuk fungsi DB::raw
+use Illuminate\Support\Facades\DB;
 
 class StatsOverview extends BaseWidget
 {
+    use InteractsWithPageFilters;
+
+    protected static ?int $sort = 1;
+
     protected static ?string $pollingInterval = '10s';
 
     protected function getStats(): array
     {
-        $pemasukan = Transaction::where('status', 'Selesai')->sum('total_harga');
-        $pengeluaran = Product::sum(DB::raw('stok_toko * harga_beli'));
+        $year = $this->filters['year'] ?? date('Y');
+
+        $pemasukan = Transaction::where('status', 'Selesai')
+            ->whereYear('created_at', $year)
+            ->sum('total_harga');
+
+        if ($year == date('Y')) {
+            $modalTerjual = Transaction::where('status', 'Selesai')
+                ->whereYear('created_at', $year)
+                ->with('details.product')
+                ->get()
+                ->flatMap->details->sum(fn ($detail) => $detail->qty * ($detail->product->harga_beli ?? 0));
+
+            $modalSisaStok = Product::sum(DB::raw('stok_toko * harga_beli'));
+            $pengeluaran = $modalTerjual + $modalSisaStok;
+        } else {
+            $pengeluaran = Transaction::where('status', 'Selesai')
+                ->whereYear('created_at', $year)
+                ->with('details.product')
+                ->get()
+                ->flatMap->details->sum(fn ($detail) => $detail->qty * ($detail->product->harga_beli ?? 0));
+        }
+
         $profit = $pemasukan - $pengeluaran;
 
         return [
-            // KOTAK 1: PEMASUKAN
-            Stat::make('Pemasukan', 'Rp ' . number_format($pemasukan, 0, ',', '.'))
+            Stat::make('Laba Kotor ', 'Rp ' . number_format($pemasukan, 0, ',', '.'))
+                ->color('success')
                 ->description('Total omset')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
-                ->color('success')
-                ->chart([7, 3, 10, 5, 15, 8, 20]),
+                ->chart([7, 4, 6, 10, 14, 15, 18]),
 
-            // KOTAK 2: PENGELUARAN (Total Modal)
-            Stat::make('Pengeluaran', 'Rp ' . number_format($pengeluaran, 0, ',', '.'))
-                ->description('Total jumlah modal seluruh stok toko')
-                ->descriptionIcon('heroicon-m-cube')
+            Stat::make('Pengeluaran ', 'Rp ' . number_format($pengeluaran, 0, ',', '.'))
                 ->color('danger')
-                ->chart([3, 2, 5, 1, 4, 2, 3]),
+                ->description('Total modal barang')
+                ->descriptionIcon('heroicon-m-arrow-trending-down')
+                ->chart([15, 14, 16, 14, 13, 11, 12]),
 
-            // KOTAK 3: PROFIT
-            Stat::make('Profit vs Modal', 'Rp ' . number_format($profit, 0, ',', '.'))
-                ->description('Selisih antara omset dan total pengeluaran')
-                ->descriptionIcon('heroicon-m-banknotes')
-                ->color($profit >= 0 ? 'primary' : 'danger')
-                ->chart([4, 1, 5, 4, 11, 6, 17]),
+            Stat::make('Laba Bersih ', 'Rp ' . number_format($profit, 0, ',', '.'))
+                ->color($profit >= 0 ? 'info' : 'danger')
+                ->description($profit >= 0 ? 'Untung' : 'Defisit')
+                ->descriptionIcon($profit >= 0 ? 'heroicon-m-banknotes' : 'heroicon-m-exclamation-triangle')
+                ->chart([2, -1, 3, 5, 8, 12, 16]),
         ];
     }
 }
