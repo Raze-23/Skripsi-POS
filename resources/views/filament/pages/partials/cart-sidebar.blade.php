@@ -97,7 +97,7 @@
                 </div>
             @elseif($this->kembalian === 0)
                 <div class="change-badge exact">
-                    <span>✓ Pas</span>
+                    <span>Pas</span>
                     <span>Rp 0</span>
                 </div>
             @else

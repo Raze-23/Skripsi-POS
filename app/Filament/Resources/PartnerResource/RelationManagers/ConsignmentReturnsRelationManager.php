@@ -9,6 +9,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -61,7 +62,47 @@ class ConsignmentReturnsRelationManager extends RelationManager
                     ->weight('bold'),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('product_id')
+                    ->relationship('product', 'nama')
+                    ->label('Filter Produk')
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('bulan_tahun')
+                    ->form([
+                        Forms\Components\Grid::make(2)->schema([
+                            Forms\Components\Select::make('bulan')
+                                ->label('Bulan')
+                                ->options([
+                                    '01' => 'Januari', '02' => 'Februari', '03' => 'Maret',
+                                    '04' => 'April', '05' => 'Mei', '06' => 'Juni',
+                                    '07' => 'Juli', '08' => 'Agustus', '09' => 'September',
+                                    '10' => 'Oktober', '11' => 'November', '12' => 'Desember',
+                                ])
+                                ->default(now()->format('m')),
+                            Forms\Components\Select::make('tahun')
+                                ->label('Tahun')
+                                ->options(function () {
+                                    $years = [];
+                                    $currentYear = now()->year;
+                                    for ($i = $currentYear - 3; $i <= $currentYear + 1; $i++) {
+                                        $years[$i] = $i;
+                                    }
+                                    return $years;
+                                })
+                                ->default(now()->year),
+                        ]),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['bulan'],
+                                fn (Builder $query, $bulan): Builder => $query->whereMonth('created_at', $bulan)
+                            )
+                            ->when(
+                                $data['tahun'],
+                                fn (Builder $query, $tahun): Builder => $query->whereYear('created_at', $tahun)
+                            );
+                    }),
             ])
             ->headerActions([
                 //

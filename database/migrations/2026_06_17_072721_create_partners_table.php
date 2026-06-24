@@ -14,7 +14,9 @@ return new class extends Migration
         Schema::create('partners', function (Blueprint $table) {
             $table->id();
             $table->string('nama_apotek');
+            $table->string('no_telp')->nullable();
             $table->text('alamat');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }

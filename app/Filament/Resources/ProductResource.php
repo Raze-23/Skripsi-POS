@@ -41,7 +41,7 @@ class ProductResource extends Resource
                         ->schema([
                             Forms\Components\Placeholder::make('filepond_css')
                                 ->hiddenLabel()
-                                ->content(new HtmlString('<style>
+                                ->content(new \Illuminate\Support\HtmlString('<style>
                                 .filepond--root { min-height: 155px !important; }
                                     .filepond--drop-label { min-height: 155px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
                                 </style>')),
@@ -56,6 +56,13 @@ class ProductResource extends Resource
                                             ->hiddenOn('create')
                                             ->disabled()
                                             ->dehydrated(false),
+                                        Forms\Components\TextInput::make('estimasi_masak')
+                                            ->label('Estimasi Waktu Pembuatan')
+                                            ->numeric()
+                                            ->required()
+                                            ->suffix('Menit')
+                                            ->default(0)
+                                            ->minValue(0),
                                         Forms\Components\DatePicker::make('tanggal_kedaluwarsa')
                                             ->required()
                                             ->native(false)
@@ -76,11 +83,28 @@ class ProductResource extends Resource
                                 ->numeric()
                                 ->required()
                                 ->prefix('Rp')
-                                ->label('Modal'),
+                                ->label('Modal')
+                                // TAMBAHAN VALIDASI MODAL
+                                ->rule(static function (\Filament\Forms\Get $get) {
+                                    return static function (string $attribute, $value, \Closure $fail) use ($get) {
+                                        $hargaJual = $get('harga_jual');
+                                        if ($hargaJual !== null && $value >= $hargaJual) {
+                                            $fail('Harga Modal tidak boleh lebih dari Harga Jual!');
+                                        }
+                                    };
+                                }),
                             Forms\Components\TextInput::make('harga_jual')
                                 ->numeric()
                                 ->required()
-                                ->prefix('Rp'),
+                                ->prefix('Rp')
+                                ->rule(static function (\Filament\Forms\Get $get) {
+                                    return static function (string $attribute, $value, \Closure $fail) use ($get) {
+                                        $hargaBeli = $get('harga_beli');
+                                        if ($hargaBeli !== null && $value <= $hargaBeli) {
+                                            $fail('Harga Jual harus lebih besar dari Harga Modal!');
+                                        }
+                                    };
+                                }),
                             Forms\Components\TextInput::make('stok_toko')
                                 ->label('Stok')
                                 ->numeric()
@@ -97,7 +121,6 @@ class ProductResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('foto')->circular()
                     ->default(asset('images/notfound.png')),
-
                 Tables\Columns\TextColumn::make('sku')
                     ->label('QR Code & SKU')
                     ->formatStateUsing(function (string $state) {
@@ -106,16 +129,19 @@ class ProductResource extends Resource
                     })
                     ->alignCenter()
                     ->searchable()
-                    ->sortable(),
-
+                    ->sortable()
+                    ->hidden(),
                 Tables\Columns\TextColumn::make('nama')->searchable(),
-
+                Tables\Columns\TextColumn::make('estimasi_masak')
+                    ->label('Waktu Produksi')
+                    ->suffix(' Menit')
+                    ->sortable()
+                    ->alignCenter(),
                 Tables\Columns\TextColumn::make('stok_toko')
                     ->label('Stok')
                     ->badge()
                     ->color(fn(int $state): string => $state < 10 ? 'danger' : 'success')
                     ->sortable(),
-
                 Tables\Columns\TextColumn::make('tanggal_kedaluwarsa')
                     ->date('d M Y')
                     ->badge()

@@ -1,19 +1,15 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-<div id="pos-toast" role="alert" aria-live="assertive">
-    <svg class="toast-icon" id="toast-icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"></svg>
-    <span id="toast-msg"></span>
-</div>
-
-{{-- Overlay flash saat scan terdeteksi --}}
-<div id="scan-flash-overlay"></div>
-
 <script>
     let html5QrCode = null;
     let scannerRunning = false;
     let scanCooldown = false;
     let lastScannedCode = '';
     let lastScanTime = 0;
+    let isStarting = false;
+
+    // 1. TAMBAHAN FLAG PENJAGA
+    let isFromScanner = false;
 
     // ======= Web Audio API Beep =======
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -22,7 +18,6 @@
     function playBeep(frequency = 1200, duration = 180) {
         try {
             if (!audioCtx) audioCtx = new AudioCtx();
-            // Resume jika suspended (kebijakan autoplay browser)
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
@@ -39,56 +34,86 @@
         }
     }
 
-    // ======= Visual Flash saat scan terdeteksi =======
-    function flashScanFeedback() {
+    function playErrorBuzz() {
+        try {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.4);
+        } catch (e) {
+            console.warn('Error beep failed:', e);
+        }
+    }
+
+    // ======= Visual Flash Pintar =======
+    function flashScanFeedback(type = 'success') {
         const overlay = document.getElementById('scan-flash-overlay');
         if (!overlay) return;
-        overlay.classList.add('active');
-        setTimeout(() => overlay.classList.remove('active'), 350);
+
+        if (type === 'error') {
+            overlay.style.backgroundColor = '#ef4444';
+            overlay.style.opacity = '0.6';
+        } else {
+            overlay.style.backgroundColor = '#ffffff';
+            overlay.style.opacity = '0.85';
+        }
+
+        setTimeout(() => {
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.backgroundColor = '', 200);
+        }, type === 'error' ? 400 : 150);
     }
 
     // ======= Scanner Functions =======
     function openBarcodeScanner() {
+        if (isStarting || scannerRunning) return;
+
         const modal = document.getElementById('barcode-scanner-modal');
-        modal.classList.add('open');
+        if(modal) modal.classList.add('open');
+        isStarting = true;
 
         setTimeout(() => {
-            if (scannerRunning) return;
             try {
                 const readerEl = document.getElementById("barcode-reader");
-                if (!readerEl) return;
-                // Bersihkan isi sebelumnya agar tidak terjadi duplikasi
+                const errorBox = document.getElementById("scanner-error-box");
+
+                if (!readerEl || !errorBox) {
+                    isStarting = false;
+                    return;
+                }
+
+                readerEl.style.display = 'block';
+                errorBox.style.display = 'none';
                 readerEl.innerHTML = '';
 
-                // formatsToSupport di CONSTRUCTOR (wajib untuk html5-qrcode v2.3.8)
                 html5QrCode = new Html5Qrcode("barcode-reader", {
                     formatsToSupport: [
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.EAN_13,
-                        Html5QrcodeSupportedFormats.EAN_8,
-                        Html5QrcodeSupportedFormats.CODE_128,
-                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.CODE_128
                     ],
                     verbose: false,
-                    // Gunakan native BarcodeDetector jika tersedia (JAUH lebih cepat)
                     useBarCodeDetectorIfSupported: true
                 });
 
                 html5QrCode.start(
                     { facingMode: "environment" },
                     {
-                        fps: 25,                          // ← naik dari 15, scan lebih sering per detik
-                        qrbox: { width: 280, height: 280 }, // ← area scan lebih besar
+                        fps: 25,
+                        qrbox: { width: 280, height: 280 },
                         aspectRatio: 1.0,
-                        disableFlip: false,
-                        experimentalFeatures: {
-                            useBarCodeDetectorIfSupported: true  // Native API = lebih cepat
-                        }
+                        disableFlip: false
                     },
                     (decodedText) => {
                         const now = Date.now();
-
-                        // Smart cooldown: kode SAMA = 2 detik, kode BEDA = 800ms
                         if (scanCooldown) {
                             if (decodedText === lastScannedCode && (now - lastScanTime) < 2000) return;
                             if (decodedText !== lastScannedCode && (now - lastScanTime) < 800) return;
@@ -98,56 +123,67 @@
                         lastScannedCode = decodedText;
                         lastScanTime = now;
 
-                        console.log('📷 QR Terdeteksi:', decodedText);
+                        // 2. TANDAI BAHWA PROSES INI BERASAL DARI SCANNER KAMERA
+                        isFromScanner = true;
 
-                        // 1. Instant visual feedback — flash hijau + getar
-                        flashScanFeedback();
-                        if (navigator.vibrate) navigator.vibrate(100);
+                        if (navigator.vibrate) navigator.vibrate(50); // Getar halus sebagai tanda terbaca
 
-                        // 2. Quick beep instan (feedback deteksi, bukan konfirmasi)
-                        playBeep(800, 80);
-
-                        // 3. Kirim ke Livewire
                         Livewire.dispatch('process-barcode', { sku: decodedText });
 
-                        // 4. Reset cooldown
+                        // Reset flag setelah PHP selesai merespon (1.5 detik)
                         setTimeout(() => {
                             scanCooldown = false;
-                        }, 1200);
+                            isFromScanner = false;
+                        }, 1500);
                     },
-                    () => {} // per-frame error, diabaikan
+                    () => {}
                 ).then(() => {
                     scannerRunning = true;
-                    console.log('🎥 Scanner aktif — FPS: 25');
+                    isStarting = false;
                 }).catch((err) => {
+                    isStarting = false;
                     console.error("Camera error:", err);
-                    document.getElementById('barcode-reader').innerHTML =
-                        '<p style="color:#ef4444; text-align:center; padding:30px 10px; font-size:12px;">' +
-                        'Kamera diblokir oleh sistem.<br>Gunakan Localhost atau koneksi HTTPS!</p>';
+
+                    let pesanError = "Kamera sedang digunakan aplikasi lain atau error sistem.";
+                    let isHttpsError = window.location.protocol !== 'https:' && window.location.hostname !== 'localhost';
+
+                    if (isHttpsError) {
+                        pesanError = "Browser memblokir kamera!<br><br>Gunakan jaringan <b>localhost</b> atau koneksi <b>HTTPS</b>.";
+                    } else if (err.name === "NotAllowedError" || String(err).includes("permission")) {
+                        pesanError = "Izin kamera ditolak!<br><br>Klik <b>ikon 🔒 Gembok</b> di sebelah URL di atas, pilih <b>Izinkan Kamera (Allow)</b>, lalu Refresh (F5).";
+                    } else if (err.name === "NotFoundError") {
+                        pesanError = "Tidak ada perangkat kamera yang terdeteksi di perangkat Anda.";
+                    }
+
+                    readerEl.style.display = 'none';
+                    document.getElementById('scanner-error-msg').innerHTML = pesanError;
+                    errorBox.style.display = 'flex';
                 });
             } catch (e) {
-                console.error("Scanner init error:", e);
+                isStarting = false;
                 closeBarcodeScanner();
             }
         }, 300);
     }
 
     function closeBarcodeScanner() {
-        document.getElementById('barcode-scanner-modal').classList.remove('open');
+        const modal = document.getElementById('barcode-scanner-modal');
+        if(modal) modal.classList.remove('open');
+
         scanCooldown = false;
         lastScannedCode = '';
+        isStarting = false;
+        isFromScanner = false; // Reset flag saat ditutup
+
         if (html5QrCode && scannerRunning) {
-            html5QrCode.stop()
-                .then(() => {
-                    scannerRunning = false;
-                    html5QrCode.clear();
-                    html5QrCode = null;
-                })
-                .catch(err => {
-                    console.warn(err);
-                    scannerRunning = false;
-                    html5QrCode = null;
-                });
+            html5QrCode.stop().then(() => {
+                scannerRunning = false;
+                html5QrCode.clear();
+                html5QrCode = null;
+            }).catch(err => {
+                scannerRunning = false;
+                html5QrCode = null;
+            });
         } else {
             html5QrCode = null;
             scannerRunning = false;
@@ -180,22 +216,26 @@
 
     // ======= Livewire Event Listeners =======
     document.addEventListener('livewire:initialized', () => {
-        // Beep SUKSES — produk berhasil masuk keranjang
+
+        // 3. MENCEGAT BUNYI BEEP JIKA BUKAN DARI KAMERA
         Livewire.on('play-beep', () => {
-            console.log('✅ Produk masuk keranjang');
-            playBeep(1400, 150);
-            // Double beep untuk konfirmasi
-            setTimeout(() => playBeep(1800, 100), 160);
+            if (!isFromScanner) return; // ABAIKAN JIKA INI ADALAH KLIK MANUAL
+            playBeep(1200, 150);
+            flashScanFeedback('success');
         });
 
-        // Beep ERROR — stok habis / produk tidak ditemukan
+        // 3. MENCEGAT BUNYI ERROR JIKA BUKAN DARI KAMERA
         Livewire.on('play-error-beep', () => {
-            console.log('❌ Scan gagal (stok habis/tidak ditemukan)');
-            playBeep(300, 400);
+            if (!isFromScanner) return; // ABAIKAN JIKA INI ADALAH KLIK MANUAL
+            playErrorBuzz();
+            flashScanFeedback('error');
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         });
 
+        // 4. NOTIFIKASI TOAST TETAP MUNCUL UNTUK SEMUA (MANUAL & KAMERA)
         Livewire.on('product-added', (data) => {
-            showToast((data[0]?.name ?? 'Produk') + ' ditambahkan ke keranjang', 'success');
+            let productName = data[0]?.name ?? 'Produk';
+            showToast(`${productName} masuk keranjang`, 'success');
         });
 
         Livewire.on('cart-cleared', () => {
@@ -203,12 +243,12 @@
         });
 
         Livewire.on('transaction-success', () => {
-            showToast('Pembayaran selesai.', 'success');
+            showToast('Pembayaran berhasil', 'success');
         });
 
         Livewire.on('stock-warning', (data) => {
-            let productName = data[0]?.name ? ' ' + data[0].name : '';
-            showToast('⚠️ Stok' + productName + ' tidak mencukupi!', 'error');
+            let errorMsg = data[0]?.name ? data[0].name : 'Stok Habis';
+            showToast('Gagal: ' + errorMsg, 'error');
         });
     });
 

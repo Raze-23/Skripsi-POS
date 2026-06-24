@@ -137,14 +137,7 @@ class Cashier extends Page
                 'subtotal' => $product->harga_jual,
             ];
         }
-
         $this->dispatch('play-beep');
-        Notification::make()
-            ->title('Masuk Keranjang!')
-            ->body($product->nama . ' berhasil ditambahkan.')
-            ->success()
-            ->send();
-
         return true;
     }
 
@@ -169,6 +162,9 @@ class Cashier extends Page
     public function removeItem($productId)
     {
         unset($this->cart[$productId]);
+        if (empty($this->cart)) {
+            $this->resetCart();
+        }
     }
 
     public function resetCart()

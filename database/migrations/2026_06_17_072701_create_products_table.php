@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('nama');
             $table->string('sku')->unique();
             $table->string('foto')->nullable();
+            $table->integer('estimasi_masak')->default(0);
             $table->integer('harga_beli');
             $table->integer('harga_jual');
             $table->integer('stok_toko')->default(0);

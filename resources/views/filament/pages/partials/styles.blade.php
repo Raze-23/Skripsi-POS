@@ -870,49 +870,44 @@
 
     /* ─── Notification toast ────────────────────────────── */
     #pos-toast {
+        visibility: hidden;
+        max-width: 400px;
+        color: #ffffff;
+        text-align: center;
+        border-radius: 9999px; /* Membuat bentuk kapsul/pill bulat sempurna */
+        padding: 10px 24px;
         position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%) translateY(-80px);
         z-index: 99999;
-        min-width: 260px;
-        max-width: 360px;
-        border-radius: 12px;
-        padding: 11px 16px;
+        left: 50%;
+        bottom: 20px; /* Melayang di area tengah bawah */
+        transform: translateX(-50%) translateY(20px);
+        font-size: 13.5px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
-        font-size: 13px;
-        font-weight: 600;
-        box-shadow: 0 8px 30px -4px rgba(0, 0, 0, .2);
-        transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), opacity .3s;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
         opacity: 0;
-        pointer-events: none;
+        /* Animasi mulus (Bouncy effect) */
+        transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     }
 
     #pos-toast.show {
-        transform: translateX(-50%) translateY(0);
+        visibility: visible;
         opacity: 1;
+        transform: translateX(-50%) translateY(0);
     }
 
-    #pos-toast.success {
-        background: #059669;
-        color: #fff;
-    }
-
-    #pos-toast.error {
-        background: #dc2626;
-        color: #fff;
-    }
-
-    #pos-toast.warn {
-        background: #d97706;
-        color: #fff;
-    }
+    /* Warna elegan modern */
+    #pos-toast.success { background-color: #059669; } /* Hijau Emerald */
+    #pos-toast.error { background-color: #dc2626; } /* Merah */
+    #pos-toast.warn { background-color: #d97706; } /* Oranye */
 
     #pos-toast .toast-icon {
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         flex-shrink: 0;
     }
 
@@ -953,6 +948,12 @@
     #scan-flash-overlay.active {
         opacity: 1;
         animation: scanFlash 0.35s ease-out forwards;
+    }
+
+    #scan-flash-overlay.flash-error {
+        background-color: #ef4444; 
+        opacity: 0.6;
+        transition: opacity 0.05s ease-in;
     }
 
     @keyframes scanFlash {

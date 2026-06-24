@@ -4,7 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Clusters\Sales;
 use App\Filament\Resources\TransactionResource\Pages;
+use App\Models\Product;
 use App\Models\Transaction;
+use Filament\Forms;
 use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section;
@@ -34,9 +36,9 @@ class TransactionResource extends Resource
 
     protected static ?string $pluralLabel = 'Riwayat Transaksi';
 
-    protected static ?int $navigationSort= 1;
+    protected static ?int $navigationSort = 1;
 
-    protected static ?string $cluster = Sales::class ;
+    protected static ?string $cluster = Sales::class;
 
     public static function table(Table $table): Table
     {
@@ -81,10 +83,59 @@ class TransactionResource extends Resource
                 SelectFilter::make('kasir_id')
                     ->relationship('kasir', 'name')
                     ->label('Yang melayani transaksi'),
-
                 Filter::make('hari_ini')
                     ->label('Transaksi Hari Ini')
                     ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today())),
+                SelectFilter::make('produk_id')
+                    ->label('Produk yang Dibeli')
+                    ->options(fn() => Product::pluck('nama', 'id')->toArray()) // Mengambil semua nama produk dari database
+                    ->searchable() // Memunculkan kolom pencarian agar mudah dicari
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query->when(
+                            $data['value'],
+                            fn (Builder $query, $productId): Builder => $query->whereHas('details', function (Builder $q) use ($productId) {
+                                // Mencari transaksi yang detailnya memiliki product_id yang dipilih
+                                $q->where('product_id', $productId);
+                            })
+                        );
+                    }),
+                Filter::make('bulan_tahun')
+                    ->form([
+                        Forms\Components\Grid::make(2)->schema([
+                            Forms\Components\Select::make('bulan')
+                                ->label('Bulan')
+                                ->options([
+                                    '01' => 'Januari', '02' => 'Februari', '03' => 'Maret',
+                                    '04' => 'April', '05' => 'Mei', '06' => 'Juni',
+                                    '07' => 'Juli', '08' => 'Agustus', '09' => 'September',
+                                    '10' => 'Oktober', '11' => 'November', '12' => 'Desember',
+                                ])
+                                ->default(now()->format('m')),
+
+                            Forms\Components\Select::make('tahun')
+                                ->label('Tahun')
+                                ->options(function () {
+                                    $years = [];
+                                    $currentYear = now()->year;
+                                    for ($i = $currentYear - 3; $i <= $currentYear + 1; $i++) {
+                                        $years[$i] = $i;
+                                    }
+                                    return $years;
+                                })
+                                ->default(now()->year),
+                        ]),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['bulan'],
+                                fn (Builder $query, $bulan): Builder => $query->whereMonth('created_at', $bulan)
+                            )
+                            ->when(
+                                $data['tahun'],
+                                fn (Builder $query, $tahun): Builder => $query->whereYear('created_at', $tahun)
+                            );
+                    }),
             ])
             ->actions([
                 ActionGroup::make([
@@ -92,7 +143,6 @@ class TransactionResource extends Resource
                         ->label('Rincian')
                         ->color('info')
                         ->modalCancelAction(fn (\Filament\Actions\StaticAction $action) => $action->color('danger')->label('Tutup')),
-                        
                     Action::make('cetak')
                         ->label('Cetak Nota')
                         ->icon('heroicon-o-printer')
@@ -111,7 +161,6 @@ class TransactionResource extends Resource
                                 })();
                             ");
                         }),
-
                     Action::make('batalkan')
                         ->label('Batalkan')
                         ->icon('heroicon-o-x-circle')
@@ -143,7 +192,8 @@ class TransactionResource extends Resource
             ])
             ->bulkActions([
                 //
-            ]);}
+            ]);
+    }
 
     public static function infolist(Infolist $infolist): Infolist
     {
@@ -188,7 +238,6 @@ class TransactionResource extends Resource
                             ])
                             ->columns(3)
                     ]),
-
                 Section::make('Rincian Pembayaran')
                     ->icon('heroicon-o-banknotes')
                     ->schema([

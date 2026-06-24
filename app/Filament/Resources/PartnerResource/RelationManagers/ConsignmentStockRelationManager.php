@@ -54,21 +54,22 @@ class ConsignmentStocksRelationManager extends RelationManager
                     ->icon('heroicon-o-truck')
                     ->color('primary')
                     ->form([
-                        Forms\Components\Select::make('product_id')
-                            ->label('Pilih Produk Utama')
-                            ->options(fn () => Product::where('stok_toko', '>', 0)->pluck('nama', 'id'))
-                            ->searchable()
-                            ->required(),
-
-                        Forms\Components\TextInput::make('jumlah')
-                            ->label('Jumlah Dikirim')
-                            ->numeric()
-                            ->minValue(1)
-                            ->required(),
+                        // Membungkus kedua input dalam 1 baris (2 kolom)
+                        Forms\Components\Grid::make(2)->schema([
+                            Forms\Components\Select::make('product_id')
+                                ->label('Pilih Produk Utama')
+                                ->options(fn () => Product::where('stok_toko', '>', 0)->pluck('nama', 'id'))
+                                ->searchable()
+                                ->required(),
+                            Forms\Components\TextInput::make('jumlah')
+                                ->label('Jumlah Dikirim')
+                                ->numeric()
+                                ->minValue(1)
+                                ->required(),
+                        ]),
                     ])
                     ->action(function (array $data, Tables\Actions\Action $action) {
                         $product = Product::find($data['product_id']);
-
                         if ($product->stok_toko < $data['jumlah']) {
                             Notification::make()
                                 ->danger()
@@ -77,19 +78,15 @@ class ConsignmentStocksRelationManager extends RelationManager
                                 ->send();
                             $action->halt();
                         }
-
                         DB::transaction(function () use ($product, $data) {
                             $product->decrement('stok_toko', $data['jumlah']);
-
                             $consignment = $this->getOwnerRecord()->consignmentStocks()
                                 ->firstOrCreate(
                                     ['product_id' => $product->id],
                                     ['stok_titipan' => 0]
                                 );
-
                             $consignment->increment('stok_titipan', $data['jumlah']);
                         });
-
                         Notification::make()
                             ->success()
                             ->title('Berhasil Mengirim Stok!')
