@@ -10,7 +10,7 @@ use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\On; // TAMBAHAN: Wajib diimpor agar bisa mendengar sinyal JS
+use Livewire\Attributes\On;
 
 class Cashier extends Page
 {
@@ -71,17 +71,17 @@ class Cashier extends Page
         return $uangBayar - $this->total_harga;
     }
 
-    // TAMBAHAN: Telinga untuk menangkap hasil scan dari kamera QR Code
+
     #[On('process-barcode')]
     public function scanBarcode($sku = null)
     {
         $skuTarget = trim($sku ?? $this->search);
         if (empty($skuTarget)) return;
 
-        // Cari produk berdasarkan SKU (exact match)
+
         $product = Product::where('sku', $skuTarget)->first();
 
-        // Fallback: cari dengan LIKE jika exact match gagal (misal ada spasi/newline dari scanner)
+
         if (!$product) {
             $product = Product::where('sku', 'like', '%' . $skuTarget . '%')->first();
         }
@@ -93,7 +93,7 @@ class Cashier extends Page
             return;
         }
 
-        // addToCart sekarang return boolean agar tahu berhasil atau tidak
+
         $added = $this->addToCart($product->id);
 
         if ($added) {
@@ -116,6 +116,12 @@ class Cashier extends Page
         if ($product->stok_toko <= 0) {
             $this->dispatch('play-error-beep');
             $this->dispatch('stock-warning', [['name' => $product->nama . ' (STOK HABIS)']]);
+            return false;
+        }
+
+        if ($product->tanggal_kedaluwarsa && \Carbon\Carbon::parse($product->tanggal_kedaluwarsa)->lt(now()->startOfDay())) {
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => $product->nama . ' (KEDALUWARSA)']]);
             return false;
         }
 
@@ -217,7 +223,7 @@ class Cashier extends Page
         $this->showReceiptModal = true;
     }
 
-    // TAMBAHAN: Telinga untuk menangkap sinyal tombol "Esc" atau cetak nota dari Javascript
+
     #[On('close-receipt')]
     public function closeReceiptModal()
     {

@@ -1,6 +1,5 @@
 <div class="pos-left">
 
-    {{-- Search + Scan --}}
     <div class="pos-search-wrap flex items-center gap-2">
         <div class="relative flex-1 min-w-[420px]">
             <svg class="pos-search-icon w-4 h-4"
@@ -22,12 +21,13 @@
         </button>
     </div>
 
-    {{-- Product Grid --}}
     <div class="pos-product-grid">
         @forelse($this->products as $product)
-            <div @if($product->stok_toko > 0) wire:click="addToCart({{ $product->id }})" @endif
+            @php $isExpired = $product->tanggal_kedaluwarsa && \Carbon\Carbon::parse($product->tanggal_kedaluwarsa)->lt(now()->startOfDay()); @endphp
+            @php $isDisabled = $product->stok_toko <= 0 || $isExpired; @endphp
+            <div @if(!$isDisabled) wire:click="addToCart({{ $product->id }})" @endif
                  class="product-card"
-                 style="{{ $product->stok_toko <= 0 ? 'opacity: 0.5; filter: grayscale(100%); cursor: not-allowed !important;' : '' }}">
+                 style="{{ $isDisabled ? 'opacity: 0.5; filter: grayscale(100%); cursor: not-allowed !important;' : '' }}">
 
                 <div class="product-img">
                     @if ($product->foto)
@@ -42,7 +42,11 @@
                         </div>
                     @endif
 
-                    @if ($product->stok_toko <= 0)
+                    @if ($isExpired)
+                        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
+                            <span style="background:#dc2626; color:#fff; font-size:11px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">KEDALUWARSA</span>
+                        </div>
+                    @elseif ($product->stok_toko <= 0)
                         <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
                             <span style="background:#ef4444; color:#fff; font-size:12px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">HABIS</span>
                         </div>
@@ -53,7 +57,7 @@
 
                 <div class="product-body">
                     <div class="product-name">{{ $product->nama }}</div>
-                    <div class="product-price" style="{{ $product->stok_toko <= 0 ? 'color:#6b7280;' : '' }}">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</div>
+                    <div class="product-price" style="{{ $isDisabled ? 'color:#6b7280;' : '' }}">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</div>
                 </div>
 
             </div>

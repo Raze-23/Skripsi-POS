@@ -1,6 +1,5 @@
 <div class="pos-right">
 
-    {{-- Cart Header --}}
     <div class="cart-header">
         <div class="cart-header-left">
             <div class="cart-icon-wrap">
@@ -17,7 +16,6 @@
         @endif
     </div>
 
-    {{-- Cart Items --}}
     <div class="cart-items">
         @if (empty($cart))
             <div class="cart-empty">
@@ -53,16 +51,13 @@
         @endif
     </div>
 
-    {{-- Payment Footer --}}
     <div class="cart-footer">
 
-        {{-- Subtotal --}}
         <div class="pay-row">
             <span class="pay-label">Subtotal</span>
             <span class="pay-val">Rp {{ number_format($this->totalHarga ?? 0, 0, ',', '.') }}</span>
         </div>
 
-        {{-- Diskon --}}
         <div class="pay-row">
             <span class="pay-label">Diskon (%)</span>
             <input type="number" wire:model.live="diskon" class="diskon-input" min="0" max="100"
@@ -71,13 +66,11 @@
 
         <hr class="pay-divider" />
 
-        {{-- Total --}}
         <div class="total-row">
             <span class="total-label">Total Tagihan</span>
             <span class="total-val">Rp {{ number_format($this->totalHarga ?? 0, 0, ',', '.') }}</span>
         </div>
 
-        {{-- Cash input --}}
         <div>
             <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:5px;">Uang Diterima</div>
             <div class="cash-wrap">
@@ -87,7 +80,6 @@
             </div>
         </div>
 
-        {{-- Change / shortage badge --}}
         @php $uangBayar = (int) $bayar ?: 0; @endphp
         @if ($uangBayar > 0 && !empty($cart))
             @if ($this->kembalian < 0)
@@ -110,7 +102,6 @@
             <div style="height:32px;"></div>
         @endif
 
-        {{-- Submit --}}
         <button wire:click="submitTransaction" class="submit-btn" wire:loading.attr="disabled"
             @if (empty($cart) || $uangBayar < $this->total_harga) disabled @endif type="button">
             <svg style="width:17px;height:17px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"

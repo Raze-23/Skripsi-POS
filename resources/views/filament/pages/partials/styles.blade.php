@@ -1,12 +1,10 @@
 <style>
-    /* ─── Reset & Base ─────────────────────────────────── */
     *,
     *::before,
     *::after {
         box-sizing: border-box;
     }
 
-    /* ─── Layout shell ─────────────────────────────────── */
     .pos-shell {
         display: flex;
         gap: 14px;
@@ -15,7 +13,6 @@
         overflow: hidden;
     }
 
-    /* ─── Left panel (products) ────────────────────────── */
     .pos-left {
         flex: 1 1 0;
         min-width: 0;
@@ -26,7 +23,6 @@
         overflow: hidden;
     }
 
-    /* ─── Search bar ───────────────────────────────────── */
     .pos-search-wrap {
         display: flex;
         gap: 8px;
@@ -91,7 +87,6 @@
         transform: scale(.96);
     }
 
-    /* ─── Product grid ─────────────────────────────────── */
     .pos-product-grid {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -143,12 +138,10 @@
         transform: scale(.97) !important;
     }
 
-    /* Fixed square thumbnail — aspect-ratio keeps it consistent */
     .product-img {
         position: relative !important;
         width: 100% !important;
         aspect-ratio: 4 / 3 !important;
-        /* landscape thumb, not tall */
         background: #f9fafb !important;
         overflow: hidden !important;
         flex-shrink: 0 !important;
@@ -216,21 +209,15 @@
         position: absolute;
         top: 8px;
         right: 8px;
-
         background: #fffdfd;
         color: rgb(255, 0, 0);
-
         font-size: 14px;
         font-weight: 700;
-
         padding: 6px 10px;
         border-radius: 999px;
-
         min-width: 70px;
         text-align: center;
-
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
-
         z-index: 10;
     }
 
@@ -251,7 +238,6 @@
         border-color: #374151;
     }
 
-    /* ─── Right panel (cart) ───────────────────────────── */
     .pos-right {
         flex: 0 0 280px;
         width: 280px;
@@ -270,7 +256,6 @@
         border-color: #1f2937;
     }
 
-    /* Cart header */
     .cart-header {
         display: flex;
         justify-content: space-between;
@@ -342,7 +327,6 @@
         background: rgba(239, 68, 68, .12);
     }
 
-    /* Cart items */
     .cart-items {
         flex: 1;
         overflow-y: auto;
@@ -499,7 +483,6 @@
         color: #dc2626;
     }
 
-    /* Cart footer / payment */
     .cart-footer {
         flex-shrink: 0;
         border-top: 1px solid #f3f4f6;
@@ -574,7 +557,6 @@
         color: #f9fafb;
     }
 
-    /* Diskon input */
     .diskon-input {
         width: 72px;
         text-align: right;
@@ -605,7 +587,6 @@
         color: #f3f4f6;
     }
 
-    /* Cash input */
     .cash-wrap {
         display: flex;
         align-items: center;
@@ -666,7 +647,6 @@
         color: #f3f4f6;
     }
 
-    /* Change / shortage badge */
     .change-badge {
         display: flex;
         justify-content: space-between;
@@ -713,7 +693,6 @@
         color: #93c5fd;
     }
 
-    /* Submit button */
     .submit-btn {
         width: 100%;
         padding: 11px;
@@ -745,7 +724,6 @@
         cursor: not-allowed;
     }
 
-    /* ─── Barcode modal ─────────────────────────────────── */
     .scanner-overlay-backdrop {
         position: fixed;
         inset: 0;
@@ -817,7 +795,6 @@
         display: none !important;
     }
 
-    /* ─── Receipt / success modal ───────────────────────── */
     .receipt-backdrop {
         position: fixed;
         inset: 0;
@@ -868,18 +845,17 @@
         background: rgba(5, 150, 105, .2);
     }
 
-    /* ─── Notification toast ────────────────────────────── */
     #pos-toast {
         visibility: hidden;
         max-width: 400px;
         color: #ffffff;
         text-align: center;
-        border-radius: 9999px; /* Membuat bentuk kapsul/pill bulat sempurna */
+        border-radius: 9999px;
         padding: 10px 24px;
         position: fixed;
         z-index: 99999;
         left: 50%;
-        bottom: 20px; /* Melayang di area tengah bawah */
+        bottom: 20px;
         transform: translateX(-50%) translateY(20px);
         font-size: 13.5px;
         font-weight: 600;
@@ -890,7 +866,6 @@
         gap: 10px;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
         opacity: 0;
-        /* Animasi mulus (Bouncy effect) */
         transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     }
 
@@ -900,10 +875,9 @@
         transform: translateX(-50%) translateY(0);
     }
 
-    /* Warna elegan modern */
-    #pos-toast.success { background-color: #059669; } /* Hijau Emerald */
-    #pos-toast.error { background-color: #dc2626; } /* Merah */
-    #pos-toast.warn { background-color: #d97706; } /* Oranye */
+    #pos-toast.success { background-color: #059669; }
+    #pos-toast.error { background-color: #dc2626; }
+    #pos-toast.warn { background-color: #d97706; }
 
     #pos-toast .toast-icon {
         width: 18px;
@@ -911,30 +885,16 @@
         flex-shrink: 0;
     }
 
-    /* ─── Animations ────────────────────────────────────── */
     @keyframes fadeIn {
-        from {
-            opacity: 0;
-        }
-
-        to {
-            opacity: 1;
-        }
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
     @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(18px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(18px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ─── Scan Flash Overlay (visual feedback saat QR terdeteksi) ── */
     #scan-flash-overlay {
         position: fixed;
         inset: 0;
@@ -951,7 +911,7 @@
     }
 
     #scan-flash-overlay.flash-error {
-        background-color: #ef4444; 
+        background-color: #ef4444;
         opacity: 0.6;
         transition: opacity 0.05s ease-in;
     }
@@ -961,7 +921,6 @@
         100% { opacity: 0; }
     }
 
-    /* ─── Scanner laser line ──────────────────────────────── */
     #barcode-reader__scan_region::after {
         content: '';
         position: absolute;
