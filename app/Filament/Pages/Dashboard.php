@@ -2,10 +2,12 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Form;
-use Filament\Forms\Set;
+use Filament\Forms\Get;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,23 +26,54 @@ class Dashboard extends \Filament\Pages\Dashboard
     {
         return $form
             ->schema([
-                TextInput::make('year')
-                    ->label('Tahun Laporan')
-                    ->default(date('Y'))
-                    ->numeric()
-                    ->extraAttributes(['style' => 'max-width: 220px;'])
-                    ->extraInputAttributes(['style' => 'text-align: center; font-weight: 900; font-size: 1.1rem;'])
-                    ->prefixAction(
-                        Action::make('mundur')
-                            ->icon('heroicon-m-chevron-left')
-                            ->action(fn (Set $set, $state) => $set('year', (int)$state - 1))
-                    )
-                    ->suffixAction(
-                        Action::make('maju')
-                            ->icon('heroicon-m-chevron-right')
-                            ->action(fn (Set $set, $state) => $set('year', (int)$state + 1))
-                    )
-                    ->live(),
+                Section::make('Filter Dasbor')
+                    ->icon('heroicon-m-funnel')
+                    ->schema([
+                        ToggleButtons::make('periode')
+                            ->hiddenLabel()
+                            ->options([
+                                'hari_ini' => 'Hari Ini',
+                                'minggu_ini' => '7 Hari Terakhir',
+                                'bulan_ini' => 'Bulan Ini',
+                                'tahun_ini' => 'Tahun Ini',
+                                'kustom' => 'Pilih Tanggal',
+                            ])
+                            ->icons([
+                                'hari_ini' => 'heroicon-m-calendar-days',
+                                'minggu_ini' => 'heroicon-m-calendar',
+                                'bulan_ini' => 'heroicon-m-chart-pie',
+                                'tahun_ini' => 'heroicon-m-chart-bar',
+                                'kustom' => 'heroicon-m-adjustments-horizontal',
+                            ])
+                            ->colors([
+                                'hari_ini' => 'primary',
+                                'minggu_ini' => 'info',
+                                'bulan_ini' => 'success',
+                                'tahun_ini' => 'warning',
+                                'kustom' => 'danger',
+                            ])
+                            ->inline()
+                            ->default('hari_ini')
+                            ->live(),
+
+                        Grid::make(2)
+                            ->schema([
+                                DatePicker::make('start_date')
+                                    ->label('Mulai Tanggal')
+                                    ->default(now()->toDateString())
+                                    ->native(false)
+                                    ->displayFormat('d M Y')
+                                    ->live(),
+                                DatePicker::make('end_date')
+                                    ->label('Sampai Tanggal')
+                                    ->default(now()->toDateString())
+                                    ->native(false)
+                                    ->displayFormat('d M Y')
+                                    ->live(),
+                            ])
+                            ->visible(fn (Get $get) => $get('periode') === 'kustom'),
+                    ])
+                    ->collapsible()
             ]);
     }
 }

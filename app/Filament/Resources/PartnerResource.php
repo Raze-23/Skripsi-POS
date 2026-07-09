@@ -84,7 +84,7 @@ class PartnerResource extends Resource
                     ->sortable()
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('no_telp')
-                    ->label('Nomo Telpon')
+                    ->label('Nomor Telpon')
                     ->icon('heroicon-m-phone')
                     ->copyable()
                     ->color('gray'),
@@ -100,7 +100,6 @@ class PartnerResource extends Resource
                     ->falseColor('danger'),
             ])
             ->filters([
-                //
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
@@ -134,9 +133,11 @@ class PartnerResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $jumlahKritis = \App\Models\Product::where('stok_toko', '>', 0)
+        $jumlahKritis = \App\Models\ProductBatch::whereHas('consignmentStocks', function ($query) {
+                $query->where('stok_titipan', '>', 0);
+            })
             ->whereNotNull('tanggal_kedaluwarsa')
-            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(7))
+            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30))
             ->count();
 
         return $jumlahKritis > 0 ? (string) $jumlahKritis : null;

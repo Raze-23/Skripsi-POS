@@ -5,17 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nota Transaksi #{{ $transaction->id }}</title>
     <style>
-        /* ==========================================================
-           PENGATURAN KERTAS & MARGIN PRINTER THERMAL
-           ========================================================== */
         @page {
-            /* Memaksa driver printer untuk menggunakan ukuran 58mm */
             size: 58mm auto;
-            /* Menghilangkan margin bawaan browser agar kertas tidak melebar */
             margin: 0;
         }
 
-        /* Mereset semua padding dan memastikan ukuran font absolut */
         * {
             box-sizing: border-box;
             font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
@@ -24,7 +18,6 @@
         }
 
         body {
-            /* Lebar fisik maksimal kertas kasir kecil */
             width: 58mm;
             max-width: 58mm;
             margin: 0 auto;
@@ -34,23 +27,18 @@
             line-height: 1.4;
         }
 
-        /* WADAH NOTA (Area yang aman untuk di-print pisau pemotong) */
         .ticket {
-            /* Sisa ruang efektif untuk teks setelah dikurangi tepi margin */
             width: 48mm;
             max-width: 48mm;
             margin: 0 auto;
-            padding-top: 5mm; /* Spasi atas kertas */
+            padding-top: 5mm;
         }
 
-        /* ==========================================================
-           TYPOGRAPHY & LAYOUT
-           ========================================================== */
         .text-center { text-align: center; }
         .text-right { text-align: right; }
         .font-bold { font-weight: bold; }
 
-        /* HEADER TOKO */
+
         .store-name {
             font-size: 15px;
             font-weight: 900;
@@ -64,7 +52,7 @@
             line-height: 1.2;
         }
 
-        /* GARIS PEMISAH THERMAL */
+
         .divider {
             border-top: 1px dashed #000;
             margin: 6px 0;
@@ -74,7 +62,7 @@
             margin: 6px 0;
         }
 
-        /* META TRANSAKSI */
+
         .meta-info {
             font-size: 10.5px;
             display: flex;
@@ -82,12 +70,12 @@
             margin-bottom: 3px;
         }
 
-        /* TABEL BARANG */
+
         table {
             width: 100%;
             border-collapse: collapse;
             margin: 4px 0;
-            table-layout: fixed; /* Memaksa agar teks tidak melebar ke luar kertas */
+            table-layout: fixed;
         }
         td {
             vertical-align: top;
@@ -98,7 +86,6 @@
             font-weight: bold;
             font-size: 11px;
             margin-bottom: 2px;
-            /* Jika nama produk terlalu panjang, ia akan turun ke bawah, bukan melebar */
             word-wrap: break-word;
         }
         .item-qty-price {
@@ -106,7 +93,7 @@
             color: #111;
         }
 
-        /* AREA TOTAL */
+
         .total-area { margin-top: 5px; }
         .total-row {
             display: flex;
@@ -122,13 +109,10 @@
             padding-bottom: 4px;
         }
 
-        /* ==========================================================
-           FOOTER (PESAN PELANGGAN)
-           ========================================================== */
         .footer {
             margin-top: 10px;
             text-align: center;
-            padding-bottom: 15px; /* Spasi aman agar logo/teks bawah tidak terpotong pisau */
+            padding-bottom: 15px;
         }
 
         .footer-greeting {
@@ -144,7 +128,7 @@
             line-height: 1.3;
         }
 
-        /* Sembunyikan scrollbar agar bersih */
+
         ::-webkit-scrollbar { display: none; }
     </style>
 </head>
@@ -168,12 +152,12 @@
             @foreach($transaction->details as $item)
             <tr>
                 <td colspan="2">
-                    <span class="item-name">{{ $item->product->nama }}</span>
+                    <span class="item-name">{{ $item->productBatch->product->nama }}</span>
                 </td>
             </tr>
             <tr>
                 <td class="item-qty-price">
-                    {{ $item->qty }} x {{ number_format($item->product->harga_jual ?? ($item->subtotal / $item->qty), 0, ',', '.') }}
+                    {{ $item->qty }} x {{ number_format($item->productBatch->product->harga_jual ?? ($item->subtotal / $item->qty), 0, ',', '.') }}
                 </td>
                 <td class="text-right font-bold">
                     {{ number_format($item->subtotal, 0, ',', '.') }}

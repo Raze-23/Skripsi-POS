@@ -4,8 +4,9 @@ namespace App\Filament\Widgets;
 
 use App\Models\ConsignmentReturn;
 use App\Models\ConsignmentStock;
-use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -21,41 +22,53 @@ class StatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $year = $this->filters['year'] ?? date('Y');
+        $periode = $this->filters['periode'] ?? 'hari_ini';
+        $startDate = now()->startOfDay();
+        $endDate = now()->endOfDay();
 
-        // =========================================================
-        // 1. HITUNG PEMASUKAN (LABA KOTOR)
-        // =========================================================
+        if ($periode === 'minggu_ini') {
+            $startDate = now()->subDays(7)->startOfDay();
+        } elseif ($periode === 'bulan_ini') {
+            $startDate = now()->startOfMonth();
+        } elseif ($periode === 'tahun_ini') {
+            $startDate = now()->startOfYear();
+        } elseif ($periode === 'kustom') {
+            $startDate = Carbon::parse($this->filters['start_date'] ?? now())->startOfDay();
+            $endDate = Carbon::parse($this->filters['end_date'] ?? now())->endOfDay();
+        }
+
         $pemasukanKasir = Transaction::where('status', 'Selesai')
-            ->whereYear('created_at', $year)
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->sum('total_harga');
 
-        $pemasukanApotek = ConsignmentReturn::whereYear('created_at', $year)
-            ->with('product')
+        $pemasukanApotek = ConsignmentReturn::whereBetween('created_at', [$startDate, $endDate])
+            ->with('productBatch.product')
             ->get()
-            ->sum(fn ($return) => $return->terjual * ($return->product->harga_jual ?? 0));
+            ->sum(fn ($return) => $return->terjual * ($return->productBatch->product->harga_jual ?? 0));
 
         $pemasukan = $pemasukanKasir + $pemasukanApotek;
 
-        // =========================================================
-        // 2. HITUNG PENGELUARAN (MODAL KESELURUHAN)
-        // =========================================================
         $modalKasirTerjual = Transaction::where('status', 'Selesai')
-            ->whereYear('created_at', $year)
-            ->with('details.product')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with('details.productBatch.product')
             ->get()
-            ->flatMap->details->sum(fn ($detail) => $detail->qty * ($detail->product->harga_beli ?? 0));
+            ->flatMap->details->sum(fn ($detail) => $detail->qty * ($detail->productBatch->product->harga_beli ?? 0));
 
-        $modalApotekTerjual = ConsignmentReturn::whereYear('created_at', $year)
-            ->with('product')
+        $modalApotekTerjual = ConsignmentReturn::whereBetween('created_at', [$startDate, $endDate])
+            ->with('productBatch.product')
             ->get()
-            ->sum(fn ($return) => $return->terjual * ($return->product->harga_beli ?? 0));
+            ->sum(fn ($return) => $return->terjual * ($return->productBatch->product->harga_beli ?? 0));
 
         $totalModalTerjual = $modalKasirTerjual + $modalApotekTerjual;
 
-        if ($year == date('Y')) {
-            $modalStokToko = Product::sum(DB::raw('stok_toko * harga_beli'));
-            $modalStokTitipan = ConsignmentStock::join('products', 'consignment_stocks.product_id', '=', 'products.id')
+        $mencakupHariIni = now()->between($startDate, $endDate);
+
+        if ($mencakupHariIni) {
+            $modalStokToko = ProductBatch::join('products', 'product_batches.product_id', '=', 'products.id')
+                ->sum(DB::raw('product_batches.stok_toko * products.harga_beli'));
+
+            $modalStokTitipan = ConsignmentStock::join('product_batches', 'consignment_stocks.product_batch_id', '=', 'product_batches.id')
+                ->join('products', 'product_batches.product_id', '=', 'products.id')
                 ->sum(DB::raw('consignment_stocks.stok_titipan * products.harga_beli'));
 
             $modalSisaStok = $modalStokToko + $modalStokTitipan;
@@ -65,9 +78,6 @@ class StatsOverview extends BaseWidget
             $pengeluaran = $totalModalTerjual;
         }
 
-        // =========================================================
-        // 3. HITUNG LABA BERSIH
-        // =========================================================
         $profit = $pemasukan - $pengeluaran;
 
         return [

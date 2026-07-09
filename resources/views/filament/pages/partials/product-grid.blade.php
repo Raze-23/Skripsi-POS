@@ -10,7 +10,7 @@
             </svg>
 
             <input type="text" wire:model.live.debounce.300ms="search" wire:keydown.enter="scanBarcode"
-                placeholder="Cari produk..." class="pos-search-input w-full" style="padding-left:36px;" autofocus />
+                placeholder="Cari produk atau scan batch code..." class="pos-search-input w-full" style="padding-left:36px;" autofocus />
         </div>
 
         <button onclick="openBarcodeScanner()" class="pos-scan-btn" type="button">
@@ -23,8 +23,12 @@
 
     <div class="pos-product-grid">
         @forelse($this->products as $product)
-            @php $isExpired = $product->tanggal_kedaluwarsa && \Carbon\Carbon::parse($product->tanggal_kedaluwarsa)->lt(now()->startOfDay()); @endphp
-            @php $isDisabled = $product->stok_toko <= 0 || $isExpired; @endphp
+            @php
+                $totalStok = $product->productBatches->sum('stok_toko');
+                $nearestExpiry = $product->productBatches->min('tanggal_kedaluwarsa');
+                $isExpired = $nearestExpiry && \Carbon\Carbon::parse($nearestExpiry)->lt(now()->startOfDay());
+                $isDisabled = $totalStok <= 0 || $isExpired;
+            @endphp
             <div @if(!$isDisabled) wire:click="addToCart({{ $product->id }})" @endif
                  class="product-card"
                  style="{{ $isDisabled ? 'opacity: 0.5; filter: grayscale(100%); cursor: not-allowed !important;' : '' }}">
@@ -46,12 +50,12 @@
                         <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
                             <span style="background:#dc2626; color:#fff; font-size:11px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">KEDALUWARSA</span>
                         </div>
-                    @elseif ($product->stok_toko <= 0)
+                    @elseif ($totalStok <= 0)
                         <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
                             <span style="background:#ef4444; color:#fff; font-size:12px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">HABIS</span>
                         </div>
-                    @elseif ($product->stok_toko <= 5)
-                        <div class="stock-badge">Sisa {{ $product->stok_toko }}</div>
+                    @elseif ($totalStok <= 5)
+                        <div class="stock-badge">Sisa {{ $totalStok }}</div>
                     @endif
                 </div>
 

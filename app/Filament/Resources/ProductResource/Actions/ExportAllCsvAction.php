@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\ProductResource\Actions;
 
-use App\Models\Product;
+use App\Models\ProductBatch;
 use Filament\Tables\Actions\Action;
 
 class ExportCsvAllAction
@@ -17,22 +17,22 @@ class ExportCsvAllAction
                 return response()->streamDownload(function () {
                     $file = fopen('php://output', 'w');
                     fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
-                    fputcsv($file, ['ID', 'SKU', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa'], ';');
-                    Product::chunk(100, function ($products) use ($file) {
-                        foreach ($products as $p) {
+                    fputcsv($file, ['ID', 'Kode Batch', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa'], ';');
+                    ProductBatch::with('product')->chunk(100, function ($batches) use ($file) {
+                        foreach ($batches as $b) {
                             fputcsv($file, [
-                                $p->id,
-                                $p->sku,
-                                $p->nama,
-                                $p->harga_beli,
-                                $p->harga_jual,
-                                $p->stok_toko,
-                                $p->tanggal_kedaluwarsa->format('d-m-Y')
+                                $b->id,
+                                $b->batch_code,
+                                $b->product->nama,
+                                $b->product->harga_beli,
+                                $b->product->harga_jual,
+                                $b->stok_toko,
+                                $b->tanggal_kedaluwarsa ? $b->tanggal_kedaluwarsa->format('d-m-Y') : '-',
                             ], ';');
                         }
                     });
                     fclose($file);
-                }, 'Semua-Data-Produk-' . now()->format('Y-m-d') . '.csv');
+                }, 'Semua-Data-Batch-' . now()->format('Y-m-d') . '.csv');
             });
     }
 }

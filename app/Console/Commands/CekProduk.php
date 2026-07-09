@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Console\Command;
@@ -19,57 +19,69 @@ class CekProduk extends Command
             $this->error('Admin belum ada di database.');
             return;
         }
-        $hariIni = Carbon::now();
-
-        // 1. CEK STOK TOKO (Gudang Utama) - Kedaluwarsa <= 7 Hari
+        
+        $hariIni = Carbon::now()->startOfDay();
         $batasToko = $hariIni->copy()->addDays(7);
-        $produkGudangKritis = Product::where('stok_toko', '>', 0)
+        $batchKritis = ProductBatch::where('stok_toko', '>', 0)
             ->whereNotNull('tanggal_kedaluwarsa')
             ->whereDate('tanggal_kedaluwarsa', '<=', $batasToko)
+            ->with('product')
             ->get();
-        foreach ($produkGudangKritis as $produk) {
-            $sisaHari = $hariIni->diffInDays(Carbon::parse($produk->tanggal_kedaluwarsa), false);
-            $status = $sisaHari < 0 ? "TELAH KEDALUWARSA" : "Sisa {$sisaHari} Hari";
-            Notification::make()
-                ->danger()
-                ->icon('heroicon-o-exclamation-triangle')
-                ->title("Bahaya Gudang: {$produk->nama}")
-                ->body("Terdapat {$produk->stok_toko} pcs di stok toko yang mendekati kedaluwarsa ({$status}). Segera periksa barang!")
-                ->sendToDatabase($admin);
+
+        foreach ($batchKritis as $batch) {
+            $sisaHari = (int) $hariIni->copy()->diffInDays(Carbon::parse($batch->tanggal_kedaluwarsa)->startOfDay(), false);
+
+            if ($sisaHari < 0) {
+                Notification::make()
+                    ->danger()
+                    ->icon('heroicon-o-x-circle')
+                    ->title("🚨 DARURAT: {$batch->product->nama} SUDAH KEDALUWARSA!")
+                    ->body("Batch {$batch->batch_code} sudah kedaluwarsa " . abs($sisaHari) . " hari lalu! Masih tersisa {$batch->stok_toko} pcs di toko. SEGERA BUANG/TARIK BARANG INI! (Kedaluwarsa: " . Carbon::parse($batch->tanggal_kedaluwarsa)->format('d M Y') . ")")
+                    ->sendToDatabase($admin);
+            } else {
+                Notification::make()
+                    ->warning()
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->title("Peringatan: {$batch->product->nama} (Batch: {$batch->batch_code})")
+                    ->body("Terdapat {$batch->stok_toko} pcs di stok toko yang mendekati kedaluwarsa (Sisa {$sisaHari} hari). Segera periksa barang!")
+                    ->sendToDatabase($admin);
+            }
         }
 
-        // 2. CEK STOK MITRA (Barang Dititipkan) - Kedaluwarsa <= 30 Hari
         $batasMitra = $hariIni->copy()->addDays(30);
-        $produkMitraKritis = Product::whereHas('consignmentStocks', function ($query) {
+        $batchMitraKritis = ProductBatch::whereHas('consignmentStocks', function ($query) {
                 $query->where('stok_titipan', '>', 0);
             })
             ->whereNotNull('tanggal_kedaluwarsa')
             ->whereDate('tanggal_kedaluwarsa', '<=', $batasMitra)
-            ->with('consignmentStocks.partner')
+            ->with(['product', 'consignmentStocks.partner'])
             ->get();
-        foreach ($produkMitraKritis as $produk) {
-            foreach ($produk->consignmentStocks as $titipan) {
-                if ($titipan->stok_titipan > 0) {
+
+        foreach ($batchMitraKritis as $batch) {
+            $sisaHari = (int) $hariIni->copy()->diffInDays(Carbon::parse($batch->tanggal_kedaluwarsa)->startOfDay(), false);
+
+            foreach ($batch->consignmentStocks as $titipan) {
+                if ($titipan->stok_titipan <= 0) continue;
+
+                if ($sisaHari < 0) {
+                    // SUDAH KEDALUWARSA di apotek — Peringatan keras
+                    Notification::make()
+                        ->danger()
+                        ->icon('heroicon-o-x-circle')
+                        ->title("🚨 DARURAT: Tarik {$batch->product->nama} dari {$titipan->partner->nama_apotek}!")
+                        ->body("Batch {$batch->batch_code} sudah kedaluwarsa " . abs($sisaHari) . " hari lalu! Masih ada {$titipan->stok_titipan} pcs di apotek. SEGERA TARIK BARANG! (Kedaluwarsa: " . Carbon::parse($batch->tanggal_kedaluwarsa)->format('d M Y') . ")")
+                        ->sendToDatabase($admin);
+                } else {
                     Notification::make()
                         ->warning()
                         ->icon('heroicon-o-truck')
                         ->title("Tarik Barang dari {$titipan->partner->nama_apotek}")
-                        ->body("Produk {$produk->nama} sebanyak {$titipan->stok_titipan} pcs di apotek ini mendekati masa kedaluwarsa (Tgl: " . Carbon::parse($produk->tanggal_kedaluwarsa)->format('d M Y') . "). Segera lakukan penarikan!")
+                        ->body("Produk {$batch->product->nama} (Batch: {$batch->batch_code}) sebanyak {$titipan->stok_titipan} pcs mendekati kedaluwarsa (Sisa {$sisaHari} hari, Tgl: " . Carbon::parse($batch->tanggal_kedaluwarsa)->format('d M Y') . "). Segera lakukan penarikan!")
                         ->sendToDatabase($admin);
                 }
             }
         }
 
-        // 3. FITUR BARU: CEK STOK HABIS (0 PCS) DI GUDANG UTAMA
-        $produkHabis = Product::where('stok_toko', 0)->get();
-        foreach ($produkHabis as $produk) {
-            Notification::make()
-                ->danger()
-                ->icon('heroicon-o-x-circle')
-                ->title("Stok Habis: {$produk->nama}")
-                ->body("Stok produk herbal {$produk->nama} di toko telah habis. Segera lakukan produksi!")
-                ->sendToDatabase($admin);
-        }
         $this->info('Pemeriksaan kedaluwarsa selesai dilakukan.');
     }
 }

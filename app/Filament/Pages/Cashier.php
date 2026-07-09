@@ -4,7 +4,9 @@ namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Sales;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
@@ -44,8 +46,9 @@ class Cashier extends Page
         return Product::query()
             ->when($this->search, function ($query) {
                 $query->where('nama', 'like', '%' . $this->search . '%')
-                    ->orWhere('sku', 'like', '%' . $this->search . '%');
+                    ->orWhereHas('productBatches', fn($q) => $q->where('batch_code', 'like', '%' . $this->search . '%'));
             })
+            ->with(['productBatches' => fn($q) => $q->where('stok_toko', '>', 0)->orderBy('tanggal_kedaluwarsa')])
             ->limit(12)
             ->get();
     }
@@ -78,31 +81,35 @@ class Cashier extends Page
         $skuTarget = trim($sku ?? $this->search);
         if (empty($skuTarget)) return;
 
+        $batch = ProductBatch::with('product')
+            ->where('batch_code', $skuTarget)
+            ->first();
 
-        $product = Product::where('sku', $skuTarget)->first();
-
-
-        if (!$product) {
-            $product = Product::where('sku', 'like', '%' . $skuTarget . '%')->first();
+        if (!$batch) {
+            $batch = ProductBatch::with('product')
+                ->where('batch_code', 'like', '%' . $skuTarget . '%')
+                ->first();
         }
 
-        if (!$product) {
+        if (!$batch) {
             $this->dispatch('play-error-beep');
-            $this->dispatch('stock-warning', [['name' => 'SKU ' . $skuTarget . ' tidak ditemukan']]);
+            $this->dispatch('stock-warning', [['name' => 'Kode batch ' . $skuTarget . ' tidak ditemukan']]);
             $this->search = '';
             return;
         }
 
-
-        $added = $this->addToCart($product->id);
+        $added = $this->addToCartByBatch($batch);
 
         if ($added) {
-            $this->dispatch('product-added', [['name' => $product->nama]]);
+            $this->dispatch('product-added', [['name' => $batch->product->nama]]);
         }
 
         $this->search = '';
     }
 
+    /**
+     * Add to cart by clicking a product tile (FIFO: auto-selects closest-expiry batch).
+     */
     public function addToCart($productId): bool
     {
         $product = Product::find($productId);
@@ -113,61 +120,95 @@ class Cashier extends Page
             return false;
         }
 
-        if ($product->stok_toko <= 0) {
+        // Find FIFO batch: closest expiry, not expired, has available stock (accounting for cart)
+        $batches = $product->productBatches()
+            ->where('stok_toko', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('tanggal_kedaluwarsa')
+                  ->orWhere('tanggal_kedaluwarsa', '>=', now()->startOfDay());
+            })
+            ->orderBy('tanggal_kedaluwarsa')
+            ->get();
+
+        $batch = null;
+        foreach ($batches as $b) {
+            $inCart = $this->cart[$b->id]['qty'] ?? 0;
+            if ($inCart < $b->stok_toko) {
+                $batch = $b;
+                break;
+            }
+        }
+
+        if (!$batch) {
             $this->dispatch('play-error-beep');
             $this->dispatch('stock-warning', [['name' => $product->nama . ' (STOK HABIS)']]);
             return false;
         }
 
-        if ($product->tanggal_kedaluwarsa && \Carbon\Carbon::parse($product->tanggal_kedaluwarsa)->lt(now()->startOfDay())) {
+        $batch->loadMissing('product');
+        return $this->addToCartByBatch($batch);
+    }
+
+    /**
+     * Add a specific batch to cart (used by both scan and tile click).
+     */
+    public function addToCartByBatch(ProductBatch $batch): bool
+    {
+        if ($batch->stok_toko <= 0) {
             $this->dispatch('play-error-beep');
-            $this->dispatch('stock-warning', [['name' => $product->nama . ' (KEDALUWARSA)']]);
+            $this->dispatch('stock-warning', [['name' => $batch->product->nama . ' (STOK HABIS)']]);
             return false;
         }
 
-        if (isset($this->cart[$product->id])) {
-            if ($this->cart[$product->id]['qty'] >= $product->stok_toko) {
+        if ($batch->tanggal_kedaluwarsa && Carbon::parse($batch->tanggal_kedaluwarsa)->lt(now()->startOfDay())) {
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => $batch->product->nama . ' (KEDALUWARSA)']]);
+            return false;
+        }
+
+        if (isset($this->cart[$batch->id])) {
+            if ($this->cart[$batch->id]['qty'] >= $batch->stok_toko) {
                 $this->dispatch('play-error-beep');
-                $this->dispatch('stock-warning', [['name' => $product->nama . ' (melebihi stok)']]);
+                $this->dispatch('stock-warning', [['name' => $batch->product->nama . ' (melebihi stok yang tersedia)']]);
                 return false;
             }
-            $this->cart[$product->id]['qty']++;
-            $this->cart[$product->id]['subtotal'] = $this->cart[$product->id]['qty'] * $this->cart[$product->id]['harga'];
+            $this->cart[$batch->id]['qty']++;
+            $this->cart[$batch->id]['subtotal'] = $this->cart[$batch->id]['qty'] * $this->cart[$batch->id]['harga'];
         } else {
-            $this->cart[$product->id] = [
-                'id' => $product->id,
-                'sku' => $product->sku,
-                'nama' => $product->nama,
-                'harga' => $product->harga_jual,
+            $this->cart[$batch->id] = [
+                'id' => $batch->id,
+                'batch_code' => $batch->batch_code,
+                'nama' => $batch->product->nama,
+                'harga' => $batch->product->harga_jual,
                 'qty' => 1,
-                'subtotal' => $product->harga_jual,
+                'subtotal' => $batch->product->harga_jual,
             ];
         }
         $this->dispatch('play-beep');
         return true;
     }
 
-    public function updateQty($productId, $newQty)
+    public function updateQty($batchId, $newQty)
     {
         $newQty = (int) $newQty;
         if ($newQty <= 0) {
-            $this->removeItem($productId);
+            $this->removeItem($batchId);
             return;
         }
 
-        $product = Product::find($productId);
-        if ($newQty > $product->stok_toko) {
-            $this->dispatch('stock-warning', [['name' => $product->nama]]);
+        $batch = ProductBatch::with('product')->find($batchId);
+        if ($newQty > $batch->stok_toko) {
+            $this->dispatch('stock-warning', [['name' => $batch->product->nama]]);
             return;
         }
 
-        $this->cart[$productId]['qty'] = $newQty;
-        $this->cart[$productId]['subtotal'] = $newQty * $this->cart[$productId]['harga'];
+        $this->cart[$batchId]['qty'] = $newQty;
+        $this->cart[$batchId]['subtotal'] = $newQty * $this->cart[$batchId]['harga'];
     }
 
-    public function removeItem($productId)
+    public function removeItem($batchId)
     {
-        unset($this->cart[$productId]);
+        unset($this->cart[$batchId]);
         if (empty($this->cart)) {
             $this->resetCart();
         }
@@ -178,7 +219,6 @@ class Cashier extends Page
         $this->cart = [];
         $this->diskon = 0;
         $this->bayar = null;
-        $this->dispatch('cart-cleared');
     }
 
     public function submitTransaction()
@@ -207,12 +247,12 @@ class Cashier extends Page
 
             foreach ($this->cart as $item) {
                 $transaction->details()->create([
-                    'product_id' => $item['id'],
+                    'product_batch_id' => $item['id'],
                     'qty' => $item['qty'],
                     'subtotal' => $item['subtotal'],
                 ]);
 
-                Product::find($item['id'])->decrement('stok_toko', $item['qty']);
+                ProductBatch::find($item['id'])->decrement('stok_toko', $item['qty']);
             }
 
             $this->lastTransactionId = $transaction->id;
@@ -229,5 +269,10 @@ class Cashier extends Page
     {
         $this->showReceiptModal = false;
         $this->resetCart();
+    }
+
+    public static function canAccess(): bool
+    {
+        return Auth::user()?->role === 'kasir';
     }
 }

@@ -64,8 +64,6 @@
             border: 1px solid #eee;
             border-radius: 6px;
         }
-
-        /* PERUBAHAN UTAMA: Ukuran dibuat persegi agar QR Code tidak gepeng */
         .qrcode-box img {
             width: 90px;
             height: 90px;
@@ -84,7 +82,7 @@
 <body>
 
     <footer>
-        Dicetak secara resmi oleh Sistem Inventaris CV. Herbal At-Tiin &bull; {{ date('d M Y H:i') }}
+        Dicetak secara resmi oleh CV. Herbal At-Tiin pada {{ date('d M Y H:i') }}
     </footer>
 
     <main>
@@ -103,20 +101,19 @@
         </div>
 
         <table class="grid-table">
-            @foreach($products->chunk(3) as $row)
+            @foreach($batches->chunk(3) as $row)
                 <tr>
-                    @foreach($row as $product)
+                    @foreach($row as $batch)
                         <td class="grid-td">
                             <div class="qrcode-card">
-                                <div class="prod-name">{{ Str::limit($product->nama, 35) }}</div>
+                                <div class="prod-name">{{ Str::limit($batch->product->nama, 35) }}</div>
                                 <div class="qrcode-box">
                                     @php
-                                        // PERUBAHAN UTAMA: Memanggil library Simple QrCode dan mengonversinya ke Base64 SVG
-                                        $qrCodeData = base64_encode(QrCode::size(90)->generate($product->sku));
+                                        $qrCodeData = base64_encode(QrCode::size(90)->generate($batch->batch_code));
                                     @endphp
-                                    <img src="data:image/svg+xml;base64,{{ $qrCodeData }}" alt="QR Code {{ $product->sku }}">
+                                    <img src="data:image/svg+xml;base64,{{ $qrCodeData }}" alt="QR Code {{ $batch->batch_code }}">
                                 </div>
-                                <div class="sku-text">{{ $product->sku }}</div>
+                                <div class="sku-text">{{ $batch->batch_code }}</div>
                             </div>
                         </td>
                     @endforeach

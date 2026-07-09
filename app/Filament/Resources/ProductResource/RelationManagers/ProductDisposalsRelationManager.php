@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProductResource\RelationManagers;
 
+use App\Models\ProductBatch;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
@@ -25,13 +26,18 @@ class ProductDisposalsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch']))
             ->recordTitleAttribute('alasan')
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('product_disposals.created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Tanggal')
                     ->dateTime('d M Y, H:i')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('productBatch.batch_code')
+                    ->label('Batch')
+                    ->fontFamily('mono')
+                    ->color('gray'),
                 Tables\Columns\TextColumn::make('alasan')
                     ->label('Alasan')
                     ->badge()
@@ -47,9 +53,7 @@ class ProductDisposalsRelationManager extends RelationManager
                     ->color('danger')
                     ->suffix(' pcs')
                     ->alignCenter(),
-                Tables\Columns\TextColumn::make('keterangan')
-                    ->label('Catatan Tambahan')
-                    ->wrap(),
+
             ])
             ->filters([
                 Tables\Filters\Filter::make('bulan_tahun')
@@ -81,11 +85,11 @@ class ProductDisposalsRelationManager extends RelationManager
                         return $query
                             ->when(
                                 $data['bulan'],
-                                fn (Builder $query, $bulan): Builder => $query->whereMonth('created_at', $bulan)
+                                fn (Builder $query, $bulan): Builder => $query->whereMonth('product_disposals.created_at', $bulan)
                             )
                             ->when(
                                 $data['tahun'],
-                                fn (Builder $query, $tahun): Builder => $query->whereYear('created_at', $tahun)
+                                fn (Builder $query, $tahun): Builder => $query->whereYear('product_disposals.created_at', $tahun)
                             );
                     }),
             ])
@@ -97,8 +101,16 @@ class ProductDisposalsRelationManager extends RelationManager
                     ->modalCancelActionLabel('Kembali')
                     ->color('danger')
                     ->modalHeading(fn() => 'Form Pembuangan: ' . $this->getOwnerRecord()->nama)
-                    ->modalDescription(fn() => 'Sisa Stok di Toko saat ini: ' . $this->getOwnerRecord()->stok_toko . ' pcs. Stok akan dikurangi secara permanen.')
                     ->form([
+                        Forms\Components\Select::make('product_batch_id')
+                            ->label('Pilih Batch')
+                            ->options(fn () => $this->getOwnerRecord()->productBatches()
+                                ->where('stok_toko', '>', 0)
+                                ->get()
+                                ->mapWithKeys(fn ($b) => [$b->id => $b->batch_code . ' (Stok: ' . $b->stok_toko . ')'])
+                            )
+                            ->required()
+                            ->searchable(),
                         Forms\Components\Grid::make(2)->schema([
                             Forms\Components\TextInput::make('jumlah')
                                 ->label('Jumlah Dibuang')
@@ -117,21 +129,20 @@ class ProductDisposalsRelationManager extends RelationManager
                         ])
                     ])
                     ->action(function (array $data, Tables\Actions\Action $action) {
-                        $product = $this->getOwnerRecord();
-                        if ($data['jumlah'] > $product->stok_toko) {
+                        $batch = ProductBatch::find($data['product_batch_id']);
+                        if ($data['jumlah'] > $batch->stok_toko) {
                             Notification::make()
                                 ->danger()
                                 ->title('Stok Tidak Cukup!')
-                                ->body("Anda mencoba membuang {$data['jumlah']} pcs, tetapi stok di toko hanya ada {$product->stok_toko} pcs.")
+                                ->body("Anda mencoba membuang {$data['jumlah']} pcs, tetapi stok batch {$batch->batch_code} hanya ada {$batch->stok_toko} pcs.")
                                 ->send();
                             $action->halt();
                         }
-                        DB::transaction(function () use ($product, $data) {
-                            $product->decrement('stok_toko', $data['jumlah']);
-                            $product->productDisposals()->create([
+                        DB::transaction(function () use ($batch, $data) {
+                            $batch->decrement('stok_toko', $data['jumlah']);
+                            $batch->productDisposals()->create([
                                 'jumlah' => $data['jumlah'],
                                 'alasan' => $data['alasan'],
-                                'keterangan' => $data['keterangan'] ?? null,
                             ]);
                         });
                         Notification::make()
@@ -140,7 +151,7 @@ class ProductDisposalsRelationManager extends RelationManager
                             ->body('Sisa stok di toko telah dikurangi.')
                             ->send();
                     })
-                    ->hidden(fn(): bool => $this->getOwnerRecord()->stok_toko <= 0),
+                    ->hidden(fn(): bool => $this->getOwnerRecord()->productBatches()->sum('stok_toko') <= 0),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
@@ -167,24 +178,24 @@ class ProductDisposalsRelationManager extends RelationManager
                         ])
                     ])
                     ->action(function (Model $record, array $data, Tables\Actions\EditAction $action) {
-                        $product = $this->getOwnerRecord();
+                        $batch = $record->productBatch;
                         $oldJumlah = $record->jumlah;
                         $newJumlah = $data['jumlah'];
                         $diff = $newJumlah - $oldJumlah;
-                        if ($diff > 0 && $product->stok_toko < $diff) {
+                        if ($diff > 0 && $batch->stok_toko < $diff) {
                             Notification::make()
                                 ->danger()
                                 ->title('Stok Tidak Cukup!')
-                                ->body("Koreksi gagal. Anda mencoba menambah buangan {$diff} pcs, tetapi sisa stok hanya {$product->stok_toko} pcs.")
+                                ->body("Koreksi gagal. Anda mencoba menambah buangan {$diff} pcs, tetapi sisa stok batch hanya {$batch->stok_toko} pcs.")
                                 ->send();
                             $action->halt();
                         }
 
-                        DB::transaction(function () use ($product, $record, $data, $diff, $newJumlah) {
+                        DB::transaction(function () use ($batch, $record, $data, $diff, $newJumlah) {
                             if ($diff > 0) {
-                                $product->decrement('stok_toko', $diff);
+                                $batch->decrement('stok_toko', $diff);
                             } elseif ($diff < 0) {
-                                $product->increment('stok_toko', abs($diff));
+                                $batch->increment('stok_toko', abs($diff));
                             }
 
                             $record->update([

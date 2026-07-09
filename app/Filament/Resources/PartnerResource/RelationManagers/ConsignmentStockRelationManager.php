@@ -3,13 +3,14 @@
 namespace App\Filament\Resources\PartnerResource\RelationManagers;
 
 use App\Models\ConsignmentReturn;
-use App\Models\Product;
+use App\Models\ProductBatch;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -29,15 +30,16 @@ class ConsignmentStocksRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('product.nama')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch.product']))
+            ->recordTitleAttribute('productBatch.product.nama')
             ->columns([
-                Tables\Columns\TextColumn::make('product.sku')
-                    ->label('SKU')
+                Tables\Columns\TextColumn::make('productBatch.batch_code')
+                    ->label('Kode Batch')
                     ->searchable()
                     ->sortable()
                     ->fontFamily('mono'),
 
-                Tables\Columns\TextColumn::make('product.nama')
+                Tables\Columns\TextColumn::make('productBatch.product.nama')
                     ->label('Nama Produk Herbal')
                     ->searchable()
                     ->weight('bold'),
@@ -54,11 +56,14 @@ class ConsignmentStocksRelationManager extends RelationManager
                     ->icon('heroicon-o-truck')
                     ->color('primary')
                     ->form([
-                        // Membungkus kedua input dalam 1 baris (2 kolom)
                         Forms\Components\Grid::make(2)->schema([
-                            Forms\Components\Select::make('product_id')
-                                ->label('Pilih Produk Utama')
-                                ->options(fn () => Product::where('stok_toko', '>', 0)->pluck('nama', 'id'))
+                            Forms\Components\Select::make('product_batch_id')
+                                ->label('Pilih Batch Produk')
+                                ->options(fn () => ProductBatch::where('stok_toko', '>', 0)
+                                    ->with('product')
+                                    ->get()
+                                    ->mapWithKeys(fn ($b) => [$b->id => $b->product->nama . ' — ' . $b->batch_code . ' (Stok: ' . $b->stok_toko . ')'])
+                                )
                                 ->searchable()
                                 ->required(),
                             Forms\Components\TextInput::make('jumlah')
@@ -69,20 +74,20 @@ class ConsignmentStocksRelationManager extends RelationManager
                         ]),
                     ])
                     ->action(function (array $data, Tables\Actions\Action $action) {
-                        $product = Product::find($data['product_id']);
-                        if ($product->stok_toko < $data['jumlah']) {
+                        $batch = ProductBatch::with('product')->find($data['product_batch_id']);
+                        if ($batch->stok_toko < $data['jumlah']) {
                             Notification::make()
                                 ->danger()
                                 ->title('Stok Utama Tidak Cukup')
-                                ->body("Sisa {$product->nama} di toko hanya {$product->stok_toko} pcs.")
+                                ->body("Sisa {$batch->product->nama} (Batch: {$batch->batch_code}) di toko hanya {$batch->stok_toko} pcs.")
                                 ->send();
                             $action->halt();
                         }
-                        DB::transaction(function () use ($product, $data) {
-                            $product->decrement('stok_toko', $data['jumlah']);
+                        DB::transaction(function () use ($batch, $data) {
+                            $batch->decrement('stok_toko', $data['jumlah']);
                             $consignment = $this->getOwnerRecord()->consignmentStocks()
                                 ->firstOrCreate(
-                                    ['product_id' => $product->id],
+                                    ['product_batch_id' => $batch->id],
                                     ['stok_titipan' => 0]
                                 );
                             $consignment->increment('stok_titipan', $data['jumlah']);
@@ -98,7 +103,7 @@ class ConsignmentStocksRelationManager extends RelationManager
                     ->label('Tarik Barang')
                     ->icon('heroicon-o-archive-box-arrow-down')
                     ->color('danger')
-                    ->modalHeading(fn (Model $record) => "Penarikan: {$record->product->nama}")
+                    ->modalHeading(fn (Model $record) => "Penarikan: {$record->productBatch->product->nama} ({$record->productBatch->batch_code})")
                     ->modalDescription(fn (Model $record) => "Total stok ditarik: {$record->stok_titipan} pcs. Input wajib sesuai dengan total stok.")
                     ->modalSubmitActionLabel('Tarik')
                     ->modalCancelActionLabel('Tutup')
@@ -140,11 +145,11 @@ class ConsignmentStocksRelationManager extends RelationManager
                         }
                         DB::transaction(function () use ($record, $data) {
                             if ($data['qty_layak'] > 0) {
-                                $record->product->increment('stok_toko', $data['qty_layak']);
+                                $record->productBatch->increment('stok_toko', $data['qty_layak']);
                             }
                             ConsignmentReturn::create([
                                 'partner_id' => $this->getOwnerRecord()->id,
-                                'product_id' => $record->product_id,
+                                'product_batch_id' => $record->product_batch_id,
                                 'terjual'    => $data['terjual'],
                                 'qty_layak'  => $data['qty_layak'],
                                 'qty_rusak'  => $data['qty_rusak'],

@@ -16,9 +16,20 @@ class ExportCsvSelectedBulkAction
             ->action(function (Collection $records) {
                 return response()->streamDownload(function () use ($records) {
                     $file = fopen('php://output', 'w');
-                    fputcsv($file, ['ID', 'SKU', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa']);
-                    foreach ($records as $p) {
-                        fputcsv($file, [$p->id, $p->sku, $p->nama, $p->harga_beli, $p->harga_jual, $p->stok_toko, $p->tanggal_kedaluwarsa->format('d-m-Y')]);
+                    fputcsv($file, ['ID', 'Kode Batch', 'Nama Produk', 'Harga Beli', 'Harga Jual', 'Stok', 'Kedaluwarsa']);
+                    foreach ($records as $product) {
+                        $product->load('productBatches');
+                        foreach ($product->productBatches as $b) {
+                            fputcsv($file, [
+                                $b->id,
+                                $b->batch_code,
+                                $product->nama,
+                                $product->harga_beli,
+                                $product->harga_jual,
+                                $b->stok_toko,
+                                $b->tanggal_kedaluwarsa ? $b->tanggal_kedaluwarsa->format('d-m-Y') : '-',
+                            ]);
+                        }
                     }
                     fclose($file);
                 }, 'Data-Produk-Terpilih-' . now()->format('Y-m-d') . '.csv');

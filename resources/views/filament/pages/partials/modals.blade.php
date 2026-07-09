@@ -3,14 +3,18 @@
         <div class="scanner-overlay-backdrop" onclick="closeBarcodeScanner()"></div>
         <div class="scanner-panel-wrap">
             <div class="scanner-panel">
+
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #f3f4f6;background:#fff;"
                     class="dark:bg-gray-900">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;animation:pulse 1.5s infinite;"></span>
-                        <span style="font-size:13px;font-weight:700;color:#1f2937;">Kamera Scanner</span>
+                    <div style="display:flex;align-items:center;gap:8px;flex:1;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;animation:pulse 1.5s infinite;flex-shrink:0;"></span>
+                        <span style="font-size:13px;font-weight:700;color:#1f2937;white-space:nowrap;">Kamera Scanner</span>
+
+                        <select id="camera-switcher" style="display:none; margin-left:auto; margin-right:10px; font-size:11px; font-weight:600; padding:4px 6px; border-radius:6px; border:1.5px solid #e5e7eb; outline:none; background:#f9fafb; color:#374151; max-width:140px; text-overflow:ellipsis;"></select>
                     </div>
+
                     <button onclick="closeBarcodeScanner()" type="button"
-                        style="width:34px;height:34px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;"
+                        style="width:34px;height:34px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s; flex-shrink:0;"
                         onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
                         <svg style="width:16px;height:16px;color:#374151;" fill="none" viewBox="0 0 24 24"
                             stroke="currentColor" stroke-width="2.5">
@@ -83,7 +87,9 @@
     @endif
 
     <div id="pos-toast" role="alert" aria-live="assertive">
-        <svg class="toast-icon" id="toast-icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"></svg>
+        <div class="toast-icon-wrap">
+            <svg class="toast-icon" id="toast-icon-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"></svg>
+        </div>
         <span id="toast-msg"></span>
     </div>
 

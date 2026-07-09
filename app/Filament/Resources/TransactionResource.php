@@ -24,13 +24,14 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class TransactionResource extends Resource
 {
     protected static ?string $model = Transaction::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?string $navigationIcon = 'heroicon-s-clipboard-document-list';
 
     protected static ?string $navigationLabel = 'Riwayat Transaksi';
 
@@ -43,6 +44,7 @@ class TransactionResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['kasir', 'details.productBatch.product']))
             ->columns([
                 TextColumn::make('id')
                     ->label('No. Nota')
@@ -55,11 +57,6 @@ class TransactionResource extends Resource
                 TextColumn::make('created_at')
                     ->label('Tanggal')
                     ->dateTime('d M Y, H:i')
-                    ->sortable(),
-
-                TextColumn::make('kasir.name')
-                    ->label('Kasir')
-                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('total_harga')
@@ -80,22 +77,18 @@ class TransactionResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                SelectFilter::make('kasir_id')
-                    ->relationship('kasir', 'name')
-                    ->label('Yang melayani transaksi'),
                 Filter::make('hari_ini')
                     ->label('Transaksi Hari Ini')
                     ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today())),
                 SelectFilter::make('produk_id')
                     ->label('Produk yang Dibeli')
-                    ->options(fn() => Product::pluck('nama', 'id')->toArray()) // Mengambil semua nama produk dari database
-                    ->searchable() // Memunculkan kolom pencarian agar mudah dicari
+                    ->options(fn() => Product::pluck('nama', 'id')->toArray())
+                    ->searchable()
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
                             $data['value'],
                             fn (Builder $query, $productId): Builder => $query->whereHas('details', function (Builder $q) use ($productId) {
-                                // Mencari transaksi yang detailnya memiliki product_id yang dipilih
-                                $q->where('product_id', $productId);
+                                $q->whereHas('productBatch', fn (Builder $q2) => $q2->where('product_id', $productId));
                             })
                         );
                     }),
@@ -176,9 +169,10 @@ class TransactionResource extends Resource
                                 $record->status = 'Batal';
                                 $record->save();
 
+                                $record->load('details.productBatch');
                                 foreach ($record->details as $item) {
-                                    if ($item->product) {
-                                        $item->product->increment('stok_toko', $item->qty);
+                                    if ($item->productBatch) {
+                                        $item->productBatch->increment('stok_toko', $item->qty);
                                     }
                                 }
                             });
@@ -191,7 +185,6 @@ class TransactionResource extends Resource
                 ]),
             ])
             ->bulkActions([
-                //
             ]);
     }
 
@@ -208,8 +201,6 @@ class TransactionResource extends Resource
                         TextEntry::make('created_at')
                             ->label('Waktu Transaksi')
                             ->dateTime('d M Y, H:i:s'),
-                        TextEntry::make('kasir.name')
-                            ->label('Kasir Bertugas'),
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn (string $state): string => match ($state) {
@@ -225,9 +216,13 @@ class TransactionResource extends Resource
                         RepeatableEntry::make('details')
                             ->label('')
                             ->schema([
-                                TextEntry::make('product.nama')
+                                TextEntry::make('productBatch.product.nama')
                                     ->label('Nama Produk')
                                     ->weight('bold'),
+                                TextEntry::make('productBatch.batch_code')
+                                    ->label('Kode Batch')
+                                    ->fontFamily('mono')
+                                    ->color('gray'),
                                 TextEntry::make('qty')
                                     ->label('Kuantitas')
                                     ->suffix(' pcs'),
@@ -236,7 +231,7 @@ class TransactionResource extends Resource
                                     ->money('IDR', locale: 'id')
                                     ->color('primary'),
                             ])
-                            ->columns(3)
+                            ->columns(4)
                     ]),
                 Section::make('Rincian Pembayaran')
                     ->icon('heroicon-o-banknotes')
@@ -268,6 +263,11 @@ class TransactionResource extends Resource
         return [
             'index' => Pages\ListTransactions::route('/'),
         ];
+    }
+
+    public static function canAccess(): bool
+    {
+        return Auth::user()?->role === 'kasir';
     }
 
     public static function canCreate(): bool

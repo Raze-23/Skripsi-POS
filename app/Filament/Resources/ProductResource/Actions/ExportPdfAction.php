@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\ProductResource\Actions;
 
-use App\Models\Product;
+use App\Models\ProductBatch;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Tables\Actions\Action;
 
@@ -15,8 +15,11 @@ class ExportPdfAction
             ->icon('heroicon-o-document-plus')
             ->color('danger')
             ->action(function () {
-                $products = Product::where('stok_toko', '>', 0)->orderBy('nama', 'asc')->get();
-                $pdf = Pdf::loadView('pdf.catalog', compact('products'));
+                $batches = ProductBatch::where('stok_toko', '>', 0)
+                    ->with('product')
+                    ->orderBy('product_id')
+                    ->get();
+                $pdf = Pdf::loadView('pdf.catalog', compact('batches'));
                 return response()->streamDownload(fn () => print($pdf->output()), 'Daftar-Produk.pdf');
             });
     }

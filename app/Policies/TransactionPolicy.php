@@ -7,14 +7,6 @@ use App\Models\User;
 
 class TransactionPolicy
 {
-    public function before(User $user, string $ability): bool|null
-    {
-        if ($user->role === 'admin') {
-            return true;
-        }
-        return null;
-    }
-
     public function viewAny(User $user): bool
     {
         return $user->role === 'kasir';

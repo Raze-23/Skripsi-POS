@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\ProductResource\Actions;
 
-use App\Models\Product;
+use App\Models\ProductBatch;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Tables\Actions\Action;
 
@@ -10,23 +10,17 @@ class GenerateQRCodeAllAction
 {
     public static function make(): Action
     {
-        return Action::make('generate_qrcode_all') 
+        return Action::make('generate_qrcode_all')
             ->label('Cetak QR Code')
             ->icon('heroicon-o-qr-code')
             ->color('gray')
             ->action(function () {
-                $products = Product::select('sku', 'nama')->get();
-
-                // Ubah target view menjadi pdf.qrcodes
-                $pdf = Pdf::loadView('pdf.qrcodes', compact('products'));
-
-                // Opsional: Atur ukuran kertas ke A4
+                $batches = ProductBatch::with('product')->get();
+                $pdf = Pdf::loadView('pdf.qrcodes', compact('batches'));
                 $pdf->setPaper('A4', 'portrait');
-
-                // Ubah nama file unduhan
                 return response()->streamDownload(
                     fn () => print($pdf->output()),
-                    'Daftar-QRCode-Produk.pdf'
+                    'Daftar-QRCode-Batch.pdf'
                 );
             });
     }

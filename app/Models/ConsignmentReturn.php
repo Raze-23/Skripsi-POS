@@ -12,8 +12,9 @@ class ConsignmentReturn extends Model
     {
         return $this->belongsTo(Partner::class);
     }
-    public function product()
+    
+    public function productBatch()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(ProductBatch::class);
     }
 }

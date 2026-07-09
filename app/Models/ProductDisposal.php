@@ -11,8 +11,8 @@ class ProductDisposal extends Model
 
     protected $guarded = [];
 
-    public function product()
+    public function productBatch()
     {
-        return $this->belongsTo(Product::class, 'product_id');
+        return $this->belongsTo(ProductBatch::class);
     }
 }

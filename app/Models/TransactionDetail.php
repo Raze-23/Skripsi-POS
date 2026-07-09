@@ -12,8 +12,9 @@ class TransactionDetail extends Model
     {
         return $this->belongsTo(Transaction::class);
     }
-    public function product()
+    
+    public function productBatch()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(ProductBatch::class);
     }
 }

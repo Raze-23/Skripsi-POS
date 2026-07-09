@@ -107,17 +107,17 @@
     </div>
 
     <div class="menu-container">
-        @foreach($products as $product)
+        @foreach($batches as $batch)
             <div class="menu-item">
                 <div class="menu-main">
-                    <div class="menu-title">{{ strtoupper($product->nama) }}</div>
+                    <div class="menu-title">{{ strtoupper($batch->product->nama) }}</div>
                     <div class="menu-line"></div>
-                    <div class="menu-price">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</div>
+                    <div class="menu-price">Rp {{ number_format($batch->product->harga_jual, 0, ',', '.') }}</div>
                 </div>
                 <div class="menu-sub">
-                    <span style="color: #d4af37;"></span> SKU: {{ $product->sku }}
-                    &nbsp;&nbsp; <span style="color: #d4af37;"></span> Sisa Stok: {{ $product->stok_toko }}
-                    &nbsp;&nbsp; <span style="color: #d4af37;"></span> Kedaluwarsa: {{ $product->tanggal_kedaluwarsa->format('d/m/Y') }}
+                    <span style="color: #d4af37;"></span> Batch: {{ $batch->batch_code }}
+                    &nbsp;&nbsp; <span style="color: #d4af37;"></span> Sisa Stok: {{ $batch->stok_toko }}
+                    &nbsp;&nbsp; <span style="color: #d4af37;"></span> Kedaluwarsa: {{ $batch->tanggal_kedaluwarsa ? $batch->tanggal_kedaluwarsa->format('d/m/Y') : '-' }}
                 </div>
             </div>
         @endforeach

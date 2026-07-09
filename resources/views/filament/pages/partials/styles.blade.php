@@ -89,7 +89,7 @@
 
     .pos-product-grid {
         display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
         gap: 8px !important;
         overflow-y: auto;
         flex: 1;
@@ -141,7 +141,7 @@
     .product-img {
         position: relative !important;
         width: 100% !important;
-        aspect-ratio: 4 / 3 !important;
+        aspect-ratio: 1 / 1 !important;
         background: #f9fafb !important;
         overflow: hidden !important;
         flex-shrink: 0 !important;
@@ -847,42 +847,63 @@
 
     #pos-toast {
         visibility: hidden;
+        min-width: 260px;
         max-width: 400px;
-        color: #ffffff;
-        text-align: center;
-        border-radius: 9999px;
-        padding: 10px 24px;
+        background-color: #ffffff;
+        color: #1f2937;
+        border: 1px solid #f3f4f6;
+        border-radius: 12px;
+        padding: 12px 16px;
         position: fixed;
         z-index: 99999;
         left: 50%;
-        bottom: 20px;
-        transform: translateX(-50%) translateY(20px);
-        font-size: 13.5px;
+        top: 24px;
+        transform: translate(-50%, -20px);
+        font-size: 13px;
         font-weight: 600;
-        letter-spacing: 0.3px;
+        letter-spacing: 0.2px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 10px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+        gap: 12px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.025);
         opacity: 0;
-        transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     #pos-toast.show {
         visibility: visible;
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        transform: translate(-50%, 0);
     }
 
-    #pos-toast.success { background-color: #059669; }
-    #pos-toast.error { background-color: #dc2626; }
-    #pos-toast.warn { background-color: #d97706; }
-
-    #pos-toast .toast-icon {
-        width: 18px;
-        height: 18px;
+    .toast-icon-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
         flex-shrink: 0;
+    }
+
+    .toast-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    #pos-toast.success .toast-icon-wrap {
+        background-color: #ecfdf5;
+        color: #059669;
+    }
+
+    #pos-toast.error .toast-icon-wrap {
+        background-color: #fef2f2;
+        color: #dc2626;
+    }
+
+    #pos-toast.warn .toast-icon-wrap {
+        background-color: #fffbeb;
+        color: #d97706;
     }
 
     @keyframes fadeIn {

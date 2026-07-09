@@ -8,16 +8,18 @@ use App\Filament\Resources\ProductResource\Actions\ExportCsvSelectedBulkAction;
 use App\Filament\Resources\ProductResource\Actions\ExportPdfAction;
 use App\Filament\Resources\ProductResource\Actions\GenerateQRCodeAllAction;
 use App\Filament\Resources\ProductResource\Pages;
+use App\Filament\Resources\ProductResource\RelationManagers\ProductBatchesRelationManager;
 use App\Filament\Resources\ProductResource\RelationManagers\ProductDisposalsRelationManager;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\HtmlString;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\DB;
 
 class ProductResource extends Resource
 {
@@ -39,23 +41,12 @@ class ProductResource extends Resource
                     Forms\Components\Wizard\Step::make('Informasi Dasar')
                         ->icon('heroicon-o-information-circle')
                         ->schema([
-                            Forms\Components\Placeholder::make('filepond_css')
-                                ->hiddenLabel()
-                                ->content(new \Illuminate\Support\HtmlString('<style>
-                                .filepond--root { min-height: 155px !important; }
-                                    .filepond--drop-label { min-height: 155px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
-                                </style>')),
                             Forms\Components\Grid::make(5)
                                 ->schema([
                                     Forms\Components\Group::make([
                                         Forms\Components\TextInput::make('nama')
                                             ->required()
                                             ->maxLength(255),
-                                        Forms\Components\TextInput::make('sku')
-                                            ->label('SKU (Kode Barang)')
-                                            ->hiddenOn('create')
-                                            ->disabled()
-                                            ->dehydrated(false),
                                         Forms\Components\TextInput::make('estimasi_masak')
                                             ->label('Estimasi Waktu Pembuatan')
                                             ->numeric()
@@ -63,10 +54,6 @@ class ProductResource extends Resource
                                             ->suffix('Menit')
                                             ->default(0)
                                             ->minValue(0),
-                                        Forms\Components\DatePicker::make('tanggal_kedaluwarsa')
-                                            ->required()
-                                            ->native(false)
-                                            ->displayFormat('d/m/Y'),
                                     ])->columnSpan(2),
                                     Forms\Components\FileUpload::make('foto')
                                         ->image()
@@ -76,7 +63,7 @@ class ProductResource extends Resource
                                         ->columnSpan(3)
                                 ])
                         ]),
-                    Forms\Components\Wizard\Step::make('Harga & Stok')
+                    Forms\Components\Wizard\Step::make('Harga')
                         ->icon('heroicon-o-banknotes')
                         ->schema([
                             Forms\Components\TextInput::make('harga_beli')
@@ -84,8 +71,7 @@ class ProductResource extends Resource
                                 ->required()
                                 ->prefix('Rp')
                                 ->label('Modal')
-                                // TAMBAHAN VALIDASI MODAL
-                                ->rule(static function (\Filament\Forms\Get $get) {
+                                ->rule(static function (Get $get) {
                                     return static function (string $attribute, $value, \Closure $fail) use ($get) {
                                         $hargaJual = $get('harga_jual');
                                         if ($hargaJual !== null && $value >= $hargaJual) {
@@ -97,7 +83,7 @@ class ProductResource extends Resource
                                 ->numeric()
                                 ->required()
                                 ->prefix('Rp')
-                                ->rule(static function (\Filament\Forms\Get $get) {
+                                ->rule(static function (Get $get) {
                                     return static function (string $attribute, $value, \Closure $fail) use ($get) {
                                         $hargaBeli = $get('harga_beli');
                                         if ($hargaBeli !== null && $value <= $hargaBeli) {
@@ -105,12 +91,7 @@ class ProductResource extends Resource
                                         }
                                     };
                                 }),
-                            Forms\Components\TextInput::make('stok_toko')
-                                ->label('Stok')
-                                ->numeric()
-                                ->required()
-                                ->default(0)
-                        ])->columns(3),
+                        ])->columns(2),
                 ])->columnSpanFull()
             ]);
     }
@@ -121,28 +102,20 @@ class ProductResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('foto')->circular()
                     ->default(asset('images/notfound.png')),
-                Tables\Columns\TextColumn::make('sku')
-                    ->label('QR Code & SKU')
-                    ->formatStateUsing(function (string $state) {
-                        $qr = QrCode::size(50)->generate($state);
-                        return new HtmlString('<div style="display:flex; flex-direction:column; align-items:center; gap:5px; padding-top: 5px;">' . $qr . '<span style="font-size: 11px; font-family: monospace;">' . $state . '</span></div>');
-                    })
-                    ->alignCenter()
-                    ->searchable()
-                    ->sortable()
-                    ->hidden(),
                 Tables\Columns\TextColumn::make('nama')->searchable(),
                 Tables\Columns\TextColumn::make('estimasi_masak')
                     ->label('Waktu Produksi')
                     ->suffix(' Menit')
                     ->sortable()
-                    ->alignCenter(),
-                Tables\Columns\TextColumn::make('stok_toko')
-                    ->label('Stok')
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('product_batches_sum_stok_toko')
+                    ->label('Total Stok')
                     ->badge()
-                    ->color(fn(int $state): string => $state < 10 ? 'danger' : 'success')
+                    ->color(fn($state): string => ($state ?? 0) < 10 ? 'danger' : 'success')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('tanggal_kedaluwarsa')
+                Tables\Columns\TextColumn::make('product_batches_min_tanggal_kedaluwarsa')
+                    ->label('Kedaluwarsa Terdekat')
                     ->date('d M Y')
                     ->badge()
                     ->color(function ($state): string {
@@ -166,9 +139,18 @@ class ProductResource extends Resource
                         };
                     })
                     ->sortable(),
+                Tables\Columns\TextColumn::make('product_batches_count')
+                    ->label('Jumlah Batch')
+                    ->counts('productBatches')
+                    ->badge()
+                    ->color('gray')
+                    ->alignCenter(),
             ])
+            ->modifyQueryUsing(fn ($query) => $query
+                ->withSum('productBatches', 'stok_toko')
+                ->withMin('productBatches', 'tanggal_kedaluwarsa')
+            )
             ->filters([
-                //
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
@@ -193,6 +175,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
+            ProductBatchesRelationManager::class,
             ProductDisposalsRelationManager::class,
         ];
     }
@@ -208,9 +191,9 @@ class ProductResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $jumlahKritis = \App\Models\Product::where('stok_toko', '>', 0)
+        $jumlahKritis = ProductBatch::where('stok_toko', '>', 0)
             ->whereNotNull('tanggal_kedaluwarsa')
-            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30))
+            ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(7))
             ->count();
 
         return $jumlahKritis > 0 ? (string) $jumlahKritis : null;

@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Product;
+use Carbon\Carbon;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Facades\DB;
@@ -19,28 +20,39 @@ class TopProductsChart extends ChartWidget
 
     protected function getData(): array
     {
-        $year = $this->filters['year'] ?? date('Y');
+        $periode = $this->filters['periode'] ?? 'hari_ini';
+        $startDate = now()->startOfDay();
+        $endDate = now()->endOfDay();
 
-        // 1. Rekap jumlah qty terjual dari Mesin Kasir per Produk
+        if ($periode === 'minggu_ini') {
+            $startDate = now()->subDays(7)->startOfDay();
+        } elseif ($periode === 'bulan_ini') {
+            $startDate = now()->startOfMonth();
+        } elseif ($periode === 'tahun_ini') {
+            $startDate = now()->startOfYear();
+        } elseif ($periode === 'kustom') {
+            $startDate = Carbon::parse($this->filters['start_date'] ?? now())->startOfDay();
+            $endDate = Carbon::parse($this->filters['end_date'] ?? now())->endOfDay();
+        }
+
         $kasirSales = DB::table('transaction_details')
             ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
+            ->join('product_batches', 'product_batches.id', '=', 'transaction_details.product_batch_id')
             ->where('transactions.status', 'Selesai')
-            ->whereYear('transactions.created_at', $year)
-            ->select('product_id', DB::raw('SUM(qty) as total_qty'))
-            ->groupBy('product_id')
-            ->pluck('total_qty', 'product_id'); // Menghasilkan format: [product_id => total_qty]
-
-        // 2. Rekap jumlah barang terjual dari Apotek (Konsinyasi) per Produk
-        $apotekSales = DB::table('consignment_returns')
-            ->whereYear('created_at', $year)
-            ->select('product_id', DB::raw('SUM(terjual) as total_qty'))
-            ->groupBy('product_id')
+            ->whereBetween('transactions.created_at', [$startDate, $endDate])
+            ->select('product_batches.product_id', DB::raw('SUM(transaction_details.qty) as total_qty'))
+            ->groupBy('product_batches.product_id')
             ->pluck('total_qty', 'product_id');
 
-        // 3. Gabungkan semua ID Produk dari kedua sumber tanpa ada duplikat
+        $apotekSales = DB::table('consignment_returns')
+            ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
+            ->whereBetween('consignment_returns.created_at', [$startDate, $endDate])
+            ->select('product_batches.product_id', DB::raw('SUM(consignment_returns.terjual) as total_qty'))
+            ->groupBy('product_batches.product_id')
+            ->pluck('total_qty', 'product_id');
+
         $allProductIds = $kasirSales->keys()->merge($apotekSales->keys())->unique();
 
-        // 4. Kalkulasi total gabungan, urutkan dari yang terbanyak, dan ambil 5 teratas
         $combinedSales = $allProductIds->map(function ($productId) use ($kasirSales, $apotekSales) {
             return [
                 'product_id' => $productId,
@@ -49,13 +61,11 @@ class TopProductsChart extends ChartWidget
         })
         ->sortByDesc('total_qty')
         ->take(5)
-        ->values(); // Mereset urutan index array
+        ->values();
 
-        // 5. Ambil nama produk dari database untuk dijadikan Label pada Chart
         $productIds = $combinedSales->pluck('product_id');
         $products = Product::whereIn('id', $productIds)->pluck('nama', 'id');
 
-        // 6. Pisahkan antara Label (Nama) dan Data (Angka) untuk Chart.js
         $labels = [];
         $data = [];
 
