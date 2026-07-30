@@ -1,6 +1,6 @@
 <div>
-    <div id="barcode-scanner-modal" wire:ignore.self>
-        <div class="scanner-overlay-backdrop" onclick="closeBarcodeScanner()"></div>
+    <div id="qrcode-scanner-modal" wire:ignore.self>
+        <div class="scanner-overlay-backdrop" onclick="closeQRCodeScanner()"></div>
         <div class="scanner-panel-wrap">
             <div class="scanner-panel">
 
@@ -13,7 +13,7 @@
                         <select id="camera-switcher" style="display:none; margin-left:auto; margin-right:10px; font-size:11px; font-weight:600; padding:4px 6px; border-radius:6px; border:1.5px solid #e5e7eb; outline:none; background:#f9fafb; color:#374151; max-width:140px; text-overflow:ellipsis;"></select>
                     </div>
 
-                    <button onclick="closeBarcodeScanner()" type="button"
+                    <button onclick="closeQRCodeScanner()" type="button"
                         style="width:34px;height:34px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s; flex-shrink:0;"
                         onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
                         <svg style="width:16px;height:16px;color:#374151;" fill="none" viewBox="0 0 24 24"
@@ -24,14 +24,14 @@
                 </div>
 
                 <div style="padding:12px;background:#000;min-height:250px;" wire:ignore>
-                    <div id="barcode-reader"></div>
+                    <div id="qrcode-reader"></div>
 
                     <div id="scanner-error-box" style="display:none; color:#ef4444; text-align:center; padding:20px 15px; font-size:13px; flex-direction:column; align-items:center; justify-content:center; height:100%; background-color:#111827;">
                         <svg style="width:40px; height:40px; margin-bottom:12px; color:#ef4444;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         <p id="scanner-error-msg" style="margin:0 0 15px; font-weight:500; line-height:1.5;"></p>
-                        <button onclick="closeBarcodeScanner()" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">
+                        <button onclick="closeQRCodeScanner()" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">
                             Tutup & Mengerti
                         </button>
                     </div>

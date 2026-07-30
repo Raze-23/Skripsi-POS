@@ -8,6 +8,11 @@ class Partner extends Model
 {
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'tanggal_kerja_sama' => 'date',
+        'is_active' => 'boolean',
+    ];
+
     public function consignmentStocks()
     {
         return $this->hasMany(ConsignmentStock::class);

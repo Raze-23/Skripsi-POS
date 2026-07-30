@@ -2,11 +2,6 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\ConsignmentReturn;
-use App\Models\ConsignmentStock;
-use App\Models\ProductBatch;
-use App\Models\Transaction;
-use Carbon\Carbon;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -22,81 +17,68 @@ class StatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $periode = $this->filters['periode'] ?? 'hari_ini';
-        $startDate = now()->startOfDay();
-        $endDate = now()->endOfDay();
+        $year = (int) ($this->filters['year'] ?? now()->year);
 
-        if ($periode === 'minggu_ini') {
-            $startDate = now()->subDays(7)->startOfDay();
-        } elseif ($periode === 'bulan_ini') {
-            $startDate = now()->startOfMonth();
-        } elseif ($periode === 'tahun_ini') {
-            $startDate = now()->startOfYear();
-        } elseif ($periode === 'kustom') {
-            $startDate = Carbon::parse($this->filters['start_date'] ?? now())->startOfDay();
-            $endDate = Carbon::parse($this->filters['end_date'] ?? now())->endOfDay();
-        }
+        $formatRupiah = fn (int $value) => 'Rp ' . number_format($value, 0, ',', '.');
 
-        $pemasukanKasir = Transaction::where('status', 'Selesai')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->sum('total_harga');
+        $pendapatanKasir = (int) DB::table('transaction_details')
+            ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
+            ->join('product_batches', 'product_batches.id', '=', 'transaction_details.product_batch_id')
+            ->join('products', 'products.id', '=', 'product_batches.product_id')
+            ->where('transactions.status', 'Selesai')
+            ->whereYear('transactions.created_at', $year)
+            ->sum(DB::raw('transaction_details.qty * products.harga_jual'));
 
-        $pemasukanApotek = ConsignmentReturn::whereBetween('created_at', [$startDate, $endDate])
-            ->with('productBatch.product')
-            ->get()
-            ->sum(fn ($return) => $return->terjual * ($return->productBatch->product->harga_jual ?? 0));
+        $pendapatanApotek = (int) DB::table('consignment_returns')
+            ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
+            ->join('products', 'products.id', '=', 'product_batches.product_id')
+            ->whereYear('consignment_returns.created_at', $year)
+            ->sum(DB::raw('consignment_returns.terjual * products.harga_jual'));
 
-        $pemasukan = $pemasukanKasir + $pemasukanApotek;
+        $totalPendapatan = $pendapatanKasir + $pendapatanApotek;
 
-        $modalKasirTerjual = Transaction::where('status', 'Selesai')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->with('details.productBatch.product')
-            ->get()
-            ->flatMap->details->sum(fn ($detail) => $detail->qty * ($detail->productBatch->product->harga_beli ?? 0));
+        $totalPengeluaran = (int) DB::table('product_batches as pb')
+            ->join('products as p', 'p.id', '=', 'pb.product_id')
+            ->leftJoin(
+                DB::raw('(SELECT product_batch_id, COALESCE(SUM(qty), 0) as sold_kasir FROM transaction_details GROUP BY product_batch_id) as td'),
+                'td.product_batch_id', '=', 'pb.id'
+            )
+            ->leftJoin(
+                DB::raw('(SELECT product_batch_id, COALESCE(SUM(terjual), 0) as sold_apotek, COALESCE(SUM(qty_rusak), 0) as rusak FROM consignment_returns GROUP BY product_batch_id) as cr'),
+                'cr.product_batch_id', '=', 'pb.id'
+            )
+            ->leftJoin(
+                DB::raw('(SELECT product_batch_id, COALESCE(SUM(stok_titipan), 0) as titipan FROM consignment_stocks GROUP BY product_batch_id) as cs'),
+                'cs.product_batch_id', '=', 'pb.id'
+            )
+            ->leftJoin(
+                DB::raw('(SELECT product_batch_id, COALESCE(SUM(jumlah), 0) as disposed FROM product_disposals GROUP BY product_batch_id) as pd'),
+                'pd.product_batch_id', '=', 'pb.id'
+            )
+            ->whereYear('pb.created_at', $year)
+            ->sum(DB::raw(
+                '(pb.stok_toko + COALESCE(td.sold_kasir, 0) + COALESCE(cr.sold_apotek, 0) + COALESCE(cr.rusak, 0) + COALESCE(cs.titipan, 0) + COALESCE(pd.disposed, 0)) * p.harga_beli'
+            ));
 
-        $modalApotekTerjual = ConsignmentReturn::whereBetween('created_at', [$startDate, $endDate])
-            ->with('productBatch.product')
-            ->get()
-            ->sum(fn ($return) => $return->terjual * ($return->productBatch->product->harga_beli ?? 0));
-
-        $totalModalTerjual = $modalKasirTerjual + $modalApotekTerjual;
-
-        $mencakupHariIni = now()->between($startDate, $endDate);
-
-        if ($mencakupHariIni) {
-            $modalStokToko = ProductBatch::join('products', 'product_batches.product_id', '=', 'products.id')
-                ->sum(DB::raw('product_batches.stok_toko * products.harga_beli'));
-
-            $modalStokTitipan = ConsignmentStock::join('product_batches', 'consignment_stocks.product_batch_id', '=', 'product_batches.id')
-                ->join('products', 'product_batches.product_id', '=', 'products.id')
-                ->sum(DB::raw('consignment_stocks.stok_titipan * products.harga_beli'));
-
-            $modalSisaStok = $modalStokToko + $modalStokTitipan;
-
-            $pengeluaran = $totalModalTerjual + $modalSisaStok;
-        } else {
-            $pengeluaran = $totalModalTerjual;
-        }
-
-        $profit = $pemasukan - $pengeluaran;
+        $labaBersih = $totalPendapatan - $totalPengeluaran;
 
         return [
-            Stat::make('Laba Kotor ', 'Rp ' . number_format($pemasukan, 0, ',', '.'))
+            Stat::make('Total Pendapatan', $formatRupiah($totalPendapatan))
                 ->color('success')
-                ->description('Total omzet')
+                ->description('Total pendapatan tahun ' . $year)
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->chart([7, 4, 6, 10, 14, 15, 18]),
 
-            Stat::make('Pengeluaran ', 'Rp ' . number_format($pengeluaran, 0, ',', '.'))
+            Stat::make('Total Pengeluaran', $formatRupiah($totalPengeluaran))
                 ->color('danger')
-                ->description('Total modal')
+                ->description('Biaya produksi tahun ' . $year)
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->chart([15, 14, 16, 14, 13, 11, 12]),
 
-            Stat::make('Laba Bersih ', 'Rp ' . number_format($profit, 0, ',', '.'))
-                ->color($profit >= 0 ? 'info' : 'danger')
-                ->description($profit >= 0 ? 'Untung' : 'Defisit')
-                ->descriptionIcon($profit >= 0 ? 'heroicon-m-banknotes' : 'heroicon-m-exclamation-triangle')
+            Stat::make('Laba Bersih', $formatRupiah($labaBersih))
+                ->color($labaBersih >= 0 ? 'info' : 'danger')
+                ->description($labaBersih >= 0 ? 'Untung' : 'Defisit')
+                ->descriptionIcon($labaBersih >= 0 ? 'heroicon-m-banknotes' : 'heroicon-m-exclamation-triangle')
                 ->chart([2, -1, 3, 5, 8, 12, 16]),
         ];
     }

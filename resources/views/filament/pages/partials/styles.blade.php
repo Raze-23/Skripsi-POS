@@ -438,11 +438,22 @@
     }
 
     .qty-val {
-        width: 22px;
+        width: 40px;
         text-align: center;
         font-size: 12px;
         font-weight: 700;
         color: #1f2937;
+        border: none;
+        background: transparent;
+        outline: none;
+        padding: 0;
+        -moz-appearance: textfield;
+    }
+
+    .qty-val::-webkit-inner-spin-button,
+    .qty-val::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
     }
 
     .dark .qty-val {
@@ -759,39 +770,39 @@
         background: #111827;
     }
 
-    #barcode-scanner-modal {
+    #qrcode-scanner-modal {
         display: none;
     }
 
-    #barcode-scanner-modal.open {
+    #qrcode-scanner-modal.open {
         display: block;
     }
 
-    #barcode-reader {
+    #qrcode-reader {
         width: 100% !important;
         position: relative;
     }
 
-    #barcode-reader video {
+    #qrcode-reader video {
         width: 100% !important;
         border-radius: 0;
         object-fit: cover;
         display: block;
     }
 
-    #barcode-reader img {
+    #qrcode-reader img {
         display: none !important;
     }
 
-    #barcode-reader__scan_region {
+    #qrcode-reader__scan_region {
         min-height: 260px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
     }
 
-    #barcode-reader__dashboard,
-    #barcode-reader__dashboard_section {
+    #qrcode-reader__dashboard,
+    #qrcode-reader__dashboard_section {
         display: none !important;
     }
 
@@ -942,7 +953,7 @@
         100% { opacity: 0; }
     }
 
-    #barcode-reader__scan_region::after {
+    #qrcode-reader__scan_region::after {
         content: '';
         position: absolute;
         left: 10%;

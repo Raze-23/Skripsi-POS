@@ -13,10 +13,12 @@ return new class extends Migration
             $table->string('nama_apotek');
             $table->string('no_telp')->nullable();
             $table->text('alamat');
+            $table->date('tanggal_kerja_sama')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
+
     public function down(): void
     {
         Schema::dropIfExists('partners');

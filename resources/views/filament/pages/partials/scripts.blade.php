@@ -71,16 +71,16 @@
     }
 
 
-    function openBarcodeScanner() {
+    function openQRCodeScanner() {
         if (isStarting || scannerRunning) return;
 
-        const modal = document.getElementById('barcode-scanner-modal');
+        const modal = document.getElementById('qrcode-scanner-modal');
         if(modal) modal.classList.add('open');
         isStarting = true;
 
         setTimeout(() => {
             try {
-                const readerEl = document.getElementById("barcode-reader");
+                const readerEl = document.getElementById("qrcode-reader");
                 const errorBox = document.getElementById("scanner-error-box");
                 const cameraSwitcher = document.getElementById("camera-switcher");
 
@@ -93,7 +93,7 @@
                 errorBox.style.display = 'none';
                 readerEl.innerHTML = '';
 
-                html5QrCode = new Html5Qrcode("barcode-reader", {
+                html5QrCode = new Html5Qrcode("qrcode-reader", {
                     formatsToSupport: [
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.EAN_13,
@@ -182,7 +182,7 @@
                             isFromScanner = true;
 
                             if (navigator.vibrate) navigator.vibrate(50);
-                            Livewire.dispatch('process-barcode', { sku: decodedText });
+                            Livewire.dispatch('process-qrcode', { sku: decodedText });
 
                             setTimeout(() => {
                                 scanCooldown = false;
@@ -219,13 +219,13 @@
 
             } catch (e) {
                 isStarting = false;
-                closeBarcodeScanner();
+                closeQRCodeScanner();
             }
         }, 300);
     }
 
-    function closeBarcodeScanner() {
-        const modal = document.getElementById('barcode-scanner-modal');
+    function closeQRCodeScanner() {
+        const modal = document.getElementById('qrcode-scanner-modal');
         if(modal) modal.classList.remove('open');
 
         scanCooldown = false;
@@ -298,6 +298,10 @@
 
         Livewire.on('transaction-success', () => {
             showToast('Pembayaran berhasil', 'success');
+        });
+
+        Livewire.on('cart-updated', ({ message }) => {
+            showToast(message, 'success');
         });
 
         Livewire.on('stock-warning', (data) => {

@@ -2,12 +2,11 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Grid;
-use Filament\Forms\Components\Section;
-use Filament\Forms\Components\ToggleButtons;
-use Filament\Forms\Form;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Forms\Form;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,56 +23,47 @@ class Dashboard extends \Filament\Pages\Dashboard
 
     public function filtersForm(Form $form): Form
     {
-        return $form
-            ->schema([
-                Section::make('Filter Dasbor')
-                    ->icon('heroicon-m-funnel')
-                    ->schema([
-                        ToggleButtons::make('periode')
-                            ->hiddenLabel()
-                            ->options([
-                                'hari_ini' => 'Hari Ini',
-                                'minggu_ini' => '7 Hari Terakhir',
-                                'bulan_ini' => 'Bulan Ini',
-                                'tahun_ini' => 'Tahun Ini',
-                                'kustom' => 'Pilih Tanggal',
-                            ])
-                            ->icons([
-                                'hari_ini' => 'heroicon-m-calendar-days',
-                                'minggu_ini' => 'heroicon-m-calendar',
-                                'bulan_ini' => 'heroicon-m-chart-pie',
-                                'tahun_ini' => 'heroicon-m-chart-bar',
-                                'kustom' => 'heroicon-m-adjustments-horizontal',
-                            ])
-                            ->colors([
-                                'hari_ini' => 'primary',
-                                'minggu_ini' => 'info',
-                                'bulan_ini' => 'success',
-                                'tahun_ini' => 'warning',
-                                'kustom' => 'danger',
-                            ])
-                            ->inline()
-                            ->default('hari_ini')
-                            ->live(),
+        $currentYear = now()->year;
 
-                        Grid::make(2)
-                            ->schema([
-                                DatePicker::make('start_date')
-                                    ->label('Mulai Tanggal')
-                                    ->default(now()->toDateString())
-                                    ->native(false)
-                                    ->displayFormat('d M Y')
-                                    ->live(),
-                                DatePicker::make('end_date')
-                                    ->label('Sampai Tanggal')
-                                    ->default(now()->toDateString())
-                                    ->native(false)
-                                    ->displayFormat('d M Y')
-                                    ->live(),
-                            ])
-                            ->visible(fn (Get $get) => $get('periode') === 'kustom'),
+        return $form
+            ->columns(6)
+            ->schema([
+                TextInput::make('year')
+                    ->hiddenLabel()
+                    ->default($currentYear)
+                    ->live()
+                    ->columnSpan(1)
+                    ->extraAttributes([
+                        'style' => 'max-width: 180px;',
                     ])
-                    ->collapsible()
+                    ->rules(['numeric', 'min:2026'])
+                    ->extraInputAttributes([
+                        'class' => 'font-bold text-lg',
+                        'style' => 'text-align: center !important;',
+                        'inputmode' => 'numeric', 
+                        'pattern' => '[0-9]*',
+                    ])
+                    ->prefixAction(
+                        Action::make('decrement')
+                            ->icon('heroicon-m-chevron-left')
+                            ->disabled(fn (Get $get) => (int) $get('year') <= 2026)
+                            ->color(fn (Get $get) => (int) $get('year') <= 2026 ? 'gray' : 'primary')
+                            ->action(function (Set $set, Get $get) {
+                                $current = (int) $get('year');
+                                if ($current > 2026) {
+                                    $set('year', $current - 1);
+                                }
+                            })
+                    )
+                    ->suffixAction(
+                        Action::make('increment')
+                            ->icon('heroicon-m-chevron-right')
+                            ->color('primary')
+                            ->action(function (Set $set, Get $get) {
+                                $current = (int) $get('year');
+                                $set('year', $current + 1);
+                            })
+                    ),
             ]);
     }
 }

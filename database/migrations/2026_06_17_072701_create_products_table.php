@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->string('nama'); // Contoh: Jahe Merah
+            $table->string('nama'); 
             $table->string('foto')->nullable();
             $table->integer('estimasi_masak')->default(0);
             $table->integer('harga_beli');

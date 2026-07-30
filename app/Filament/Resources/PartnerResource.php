@@ -5,9 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Clusters\Stock;
 use App\Filament\Resources\PartnerResource\Pages;
 use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentReturnsRelationManager;
-use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentStocksRelationManager;
+use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentStockRelationManager;
 use App\Models\Partner;
 use Filament\Forms;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -55,7 +56,16 @@ class PartnerResource extends Resource
                                             ->label('Nomor WhatsApp')
                                             ->tel()
                                             ->required()
-                                            ->maxLength('12'),
+                                            ->minLength(10)
+                                            ->maxLength(13)
+                                            ->regex('/^[0-9]+$/')
+                                            ->rules(['starts_with:08,62'])
+                                            ->validationMessages([
+                                                'starts_with' => 'Nomor WhatsApp harus diawali dengan awalan 08 atau 62.',
+                                                'min' => 'Nomor WhatsApp tidak valid, minimal 10 digit.',
+                                                'max' => 'Nomor WhatsApp terlalu panjang, maksimal 13 digit.',
+                                                'regex' => 'Nomor WhatsApp hanya boleh berisi angka.',
+                                            ]),
                                         Forms\Components\Toggle::make('is_active')
                                             ->label('Status Kemitraan')
                                             ->helperText('Nonaktifkan jika kerjasama berakhir')
@@ -64,10 +74,12 @@ class PartnerResource extends Resource
                                             ->offColor('danger')
                                             ->visibleOn('edit'),
                                     ]),
-                                Forms\Components\Placeholder::make('created_at')
-                                    ->label('Terdaftar Sejak')
-                                    ->content(fn($record): string => $record ? $record->created_at->diffForHumans() : '-')
-                                    ->visibleOn('edit'),
+                                DatePicker::make('tanggal_kerja_sama')
+                                    ->label('Kerja Sama Sejak')
+                                    ->default(now())
+                                    ->required()
+                                    ->native(false)
+                                    ->displayFormat('d F Y')
                             ])
                             ->columnSpan(1),
                     ]),
@@ -109,7 +121,6 @@ class PartnerResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -117,7 +128,7 @@ class PartnerResource extends Resource
     public static function getRelations(): array
     {
         return [
-            ConsignmentStocksRelationManager::class,
+            ConsignmentStockRelationManager::class,
             ConsignmentReturnsRelationManager::class,
         ];
     }

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 class ProductDisposalsRelationManager extends RelationManager
 {
     protected static string $relationship = 'productDisposals';
-    protected static ?string $title = 'Riwayat Stok';
+    protected static ?string $title = 'Buang Produk';
 
     public function form(Form $form): Form
     {
@@ -91,6 +91,22 @@ class ProductDisposalsRelationManager extends RelationManager
                                 $data['tahun'],
                                 fn (Builder $query, $tahun): Builder => $query->whereYear('product_disposals.created_at', $tahun)
                             );
+                    })
+                    ->indicateUsing(function (array $data): ?\Filament\Tables\Filters\Indicator {
+                        if (empty($data['bulan']) || empty($data['tahun'])) {
+                            return null;
+                        }
+
+                        $daftarBulan = [
+                            '01' => 'Januari', '02' => 'Februari', '03' => 'Maret',
+                            '04' => 'April', '05' => 'Mei', '06' => 'Juni',
+                            '07' => 'Juli', '08' => 'Agustus', '09' => 'September',
+                            '10' => 'Oktober', '11' => 'November', '12' => 'Desember',
+                        ];
+
+                        $namaBulan = $daftarBulan[$data['bulan']] ?? $data['bulan'];
+
+                        return \Filament\Tables\Filters\Indicator::make('Periode: ' . $namaBulan . ' ' . $data['tahun']);
                     }),
             ])
             ->headerActions([

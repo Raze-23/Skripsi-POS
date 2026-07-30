@@ -51,7 +51,7 @@ class ProductResource extends Resource
                                             ->label('Estimasi Waktu Pembuatan')
                                             ->numeric()
                                             ->required()
-                                            ->suffix('Menit')
+                                            ->suffix('Hari')
                                             ->default(0)
                                             ->minValue(0),
                                     ])->columnSpan(2),

@@ -9,6 +9,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -39,6 +40,7 @@ class ProductBatchesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->where('stok_toko', '>', 0))
             ->recordTitleAttribute('batch_code')
             ->defaultSort('created_at', 'desc')
             ->columns([
@@ -82,6 +84,9 @@ class ProductBatchesRelationManager extends RelationManager
                     })
                     ->sortable(),
             ])
+            ->filters([
+                //
+            ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
                     ->label('Tambah Batch Baru')
@@ -94,8 +99,10 @@ class ProductBatchesRelationManager extends RelationManager
                     ),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->hidden(fn ($record) => $record->stok_toko <= 0),
+                Tables\Actions\DeleteAction::make()
+                    ->hidden(fn ($record) => $record->stok_toko <= 0),
             ]);
     }
 }

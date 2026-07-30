@@ -71,7 +71,8 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotificationsPolling('30s')
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn (): string => '<style>
+                fn (): string => 
+                '<style>
                     .fi-topbar-database-notifications-btn .fi-badge {
                         background-color: rgb(239 68 68) !important; 
                         color: white !important;

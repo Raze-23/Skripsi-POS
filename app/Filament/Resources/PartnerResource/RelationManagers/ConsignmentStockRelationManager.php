@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
-class ConsignmentStocksRelationManager extends RelationManager
+class ConsignmentStockRelationManager extends RelationManager
 {
     protected static string $relationship = 'consignmentStocks';
 

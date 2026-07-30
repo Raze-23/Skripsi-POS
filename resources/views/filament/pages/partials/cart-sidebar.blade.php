@@ -29,15 +29,23 @@
             </div>
         @else
             @foreach ($cart as $id => $item)
-                <div class="cart-item">
+                <div class="cart-item" wire:key="cart-item-{{ $id }}">
                     <div class="cart-item-info">
                         <div class="cart-item-name">{{ $item['nama'] }}</div>
+                        <div class="text-[10px] text-emerald-600 font-mono bg-emerald-50 inline-block px-1 rounded mt-0.5 border border-emerald-200">Lot: {{ $item['batch_code'] }}</div>
                         <div class="cart-item-price">@ Rp {{ number_format($item['harga'], 0, ',', '.') }}</div>
                     </div>
                     <div class="qty-wrap">
                         <button wire:click="updateQty({{ $id }}, {{ $item['qty'] - 1 }})" class="qty-btn"
                             type="button">−</button>
-                        <span class="qty-val">{{ $item['qty'] }}</span>
+                        <input 
+                            type="number" 
+                            value="{{ $item['qty'] }}" 
+                            wire:change="updateQty({{ $id }}, $event.target.value)" 
+                            wire:key="input-qty-{{ $id }}-{{ $item['qty'] }}"
+                            class="qty-val qty-input-manual" 
+                            min="1" 
+                        />
                         <button wire:click="updateQty({{ $id }}, {{ $item['qty'] + 1 }})" class="qty-btn"
                             type="button">+</button>
                     </div>

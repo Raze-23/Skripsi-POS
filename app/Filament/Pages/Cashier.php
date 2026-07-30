@@ -48,6 +48,7 @@ class Cashier extends Page
                 $query->where('nama', 'like', '%' . $this->search . '%')
                     ->orWhereHas('productBatches', fn($q) => $q->where('batch_code', 'like', '%' . $this->search . '%'));
             })
+            ->whereHas('productBatches', fn($q) => $q->where('stok_toko', '>', 0))
             ->with(['productBatches' => fn($q) => $q->where('stok_toko', '>', 0)->orderBy('tanggal_kedaluwarsa')])
             ->limit(12)
             ->get();
@@ -75,8 +76,8 @@ class Cashier extends Page
     }
 
 
-    #[On('process-barcode')]
-    public function scanBarcode($sku = null)
+    #[On('process-qrcode')]
+    public function scanQRCode($sku = null)
     {
         $skuTarget = trim($sku ?? $this->search);
         if (empty($skuTarget)) return;
@@ -107,9 +108,6 @@ class Cashier extends Page
         $this->search = '';
     }
 
-    /**
-     * Add to cart by clicking a product tile (FIFO: auto-selects closest-expiry batch).
-     */
     public function addToCart($productId): bool
     {
         $product = Product::find($productId);
@@ -120,38 +118,22 @@ class Cashier extends Page
             return false;
         }
 
-        // Find FIFO batch: closest expiry, not expired, has available stock (accounting for cart)
-        $batches = $product->productBatches()
-            ->where('stok_toko', '>', 0)
-            ->where(function ($q) {
-                $q->whereNull('tanggal_kedaluwarsa')
-                  ->orWhere('tanggal_kedaluwarsa', '>=', now()->startOfDay());
-            })
-            ->orderBy('tanggal_kedaluwarsa')
-            ->get();
-
-        $batch = null;
-        foreach ($batches as $b) {
-            $inCart = $this->cart[$b->id]['qty'] ?? 0;
-            if ($inCart < $b->stok_toko) {
-                $batch = $b;
-                break;
+        $currentQty = 0;
+        foreach ($this->cart as $item) {
+            if (isset($item['product_id']) && $item['product_id'] == $productId) {
+                $currentQty += $item['qty'];
             }
         }
 
-        if (!$batch) {
-            $this->dispatch('play-error-beep');
-            $this->dispatch('stock-warning', [['name' => $product->nama . ' (STOK HABIS)']]);
-            return false;
+        $result = $this->recalculateProductFifo($productId, $currentQty + 1);
+
+        if ($result) {
+            $this->dispatch('play-beep');
         }
 
-        $batch->loadMissing('product');
-        return $this->addToCartByBatch($batch);
+        return $result;
     }
 
-    /**
-     * Add a specific batch to cart (used by both scan and tile click).
-     */
     public function addToCartByBatch(ProductBatch $batch): bool
     {
         if ($batch->stok_toko <= 0) {
@@ -166,44 +148,112 @@ class Cashier extends Page
             return false;
         }
 
-        if (isset($this->cart[$batch->id])) {
-            if ($this->cart[$batch->id]['qty'] >= $batch->stok_toko) {
-                $this->dispatch('play-error-beep');
-                $this->dispatch('stock-warning', [['name' => $batch->product->nama . ' (melebihi stok yang tersedia)']]);
-                return false;
+        $batch->loadMissing('product');
+        $productId = $batch->product_id;
+
+        $currentQty = 0;
+        foreach ($this->cart as $item) {
+            if (isset($item['product_id']) && $item['product_id'] == $productId) {
+                $currentQty += $item['qty'];
             }
-            $this->cart[$batch->id]['qty']++;
-            $this->cart[$batch->id]['subtotal'] = $this->cart[$batch->id]['qty'] * $this->cart[$batch->id]['harga'];
-        } else {
-            $this->cart[$batch->id] = [
-                'id' => $batch->id,
-                'batch_code' => $batch->batch_code,
-                'nama' => $batch->product->nama,
-                'harga' => $batch->product->harga_jual,
-                'qty' => 1,
-                'subtotal' => $batch->product->harga_jual,
-            ];
         }
-        $this->dispatch('play-beep');
-        return true;
+
+        $result = $this->recalculateProductFifo($productId, $currentQty + 1);
+
+        if ($result) {
+            $this->dispatch('play-beep');
+        }
+
+        return $result;
     }
 
     public function updateQty($batchId, $newQty)
     {
         $newQty = (int) $newQty;
-        if ($newQty <= 0) {
-            $this->removeItem($batchId);
+
+        if ($newQty < 1) {
+            unset($this->cart[$batchId]);
+            if (empty($this->cart)) {
+                $this->resetCart();
+            }
             return;
         }
 
-        $batch = ProductBatch::with('product')->find($batchId);
-        if ($newQty > $batch->stok_toko) {
-            $this->dispatch('stock-warning', [['name' => $batch->product->nama]]);
+        if (!isset($this->cart[$batchId])) {
             return;
         }
 
-        $this->cart[$batchId]['qty'] = $newQty;
-        $this->cart[$batchId]['subtotal'] = $newQty * $this->cart[$batchId]['harga'];
+        $productId = $this->cart[$batchId]['product_id'];
+
+        $totalCurrentQty = 0;
+        foreach ($this->cart as $id => $item) {
+            if (isset($item['product_id']) && $item['product_id'] == $productId && $id != $batchId) {
+                $totalCurrentQty += $item['qty'];
+            }
+        }
+
+        $totalDesiredQty = $totalCurrentQty + $newQty;
+
+        $this->recalculateProductFifo($productId, $totalDesiredQty);
+    }
+
+    public function recalculateProductFifo($productId, $totalRequestedQty): bool
+    {
+        $batches = ProductBatch::with('product')
+            ->where('product_id', $productId)
+            ->where('stok_toko', '>', 0)
+            ->where(function ($q) {
+                $q->whereNull('tanggal_kedaluwarsa')
+                  ->orWhere('tanggal_kedaluwarsa', '>=', now()->startOfDay());
+            })
+            ->orderBy('tanggal_kedaluwarsa')
+            ->get();
+
+        $totalStokToko = $batches->sum('stok_toko');
+
+        if ($totalStokToko <= 0) {
+            $productName = Product::find($productId)?->nama ?? 'Produk';
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => $productName . ' (STOK HABIS)']]);
+            return false;
+        }
+
+        if ($totalRequestedQty > $totalStokToko) {
+            $productName = $batches->first()?->product?->nama ?? 'Produk';
+            $this->dispatch('play-error-beep');
+            $this->dispatch('stock-warning', [['name' => $productName . ' (Maks: ' . $totalStokToko . ')']]);
+            $totalRequestedQty = $totalStokToko;
+        }
+
+        foreach ($this->cart as $key => $item) {
+            if (isset($item['product_id']) && $item['product_id'] == $productId) {
+                unset($this->cart[$key]);
+            }
+        }
+
+        $remainingQty = $totalRequestedQty;
+
+        foreach ($batches as $batch) {
+            if ($remainingQty <= 0) {
+                break;
+            }
+
+            $takeQty = min($remainingQty, $batch->stok_toko);
+
+            $this->cart[$batch->id] = [
+                'id' => $batch->id,
+                'product_id' => $productId,
+                'batch_code' => $batch->batch_code,
+                'nama' => $batch->product->nama ?? 'Produk',
+                'harga' => $batch->product->harga_jual,
+                'qty' => $takeQty,
+                'subtotal' => $takeQty * $batch->product->harga_jual,
+            ];
+
+            $remainingQty -= $takeQty;
+        }
+
+        return true;
     }
 
     public function removeItem($batchId)

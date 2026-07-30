@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('product_batches', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->string('batch_code')->unique(); // Pengganti SKU, Contoh: JM-2607-01
+            $table->string('batch_code')->unique();
             $table->integer('stok_toko')->default(0);
             $table->date('tanggal_kedaluwarsa');
             $table->timestamps();
