@@ -11,7 +11,7 @@ class ExportCsvSelectedBulkAction
     public static function make(): BulkAction
     {
         return BulkAction::make('export_csv_selected')
-            ->label('Export CSV')
+            ->label('Ekspor CSV')
             ->icon('heroicon-o-document-check')
             ->color('success')
             ->action(function (Collection $records) {

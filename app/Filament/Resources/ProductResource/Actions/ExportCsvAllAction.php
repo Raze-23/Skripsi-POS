@@ -11,7 +11,7 @@ class ExportCsvAllAction
     public static function make(): Action
     {
         return Action::make('export_csv_all')
-            ->label('Export CSV')
+            ->label('Ekspor CSV')
             ->icon('heroicon-o-document-plus')
             ->color('success')
             ->action(function () {
