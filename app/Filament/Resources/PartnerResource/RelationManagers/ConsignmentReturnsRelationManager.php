@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\PartnerResource\RelationManagers;
 
 use App\Models\ConsignmentReturn;
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -12,6 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ConsignmentReturnsRelationManager extends RelationManager
 {
@@ -25,6 +28,26 @@ class ConsignmentReturnsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        $cekTotalKoreksi = function (Get $get, Model $record, string $field, $value): ?string {
+            $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
+
+            $t = $field === 'terjual' ? (int) $value : (int) $get('terjual');
+            $l = $field === 'qty_layak' ? (int) $value : (int) $get('qty_layak');
+            $r = $field === 'qty_rusak' ? (int) $value : (int) $get('qty_rusak');
+
+            $totalBaru = $t + $l + $r;
+
+            if ($totalBaru > $totalAwal) {
+                return "Kelebihan! Total ({$totalBaru} pcs) melampaui stok titipan awal ({$totalAwal} pcs).";
+            }
+
+            if ($totalBaru < $totalAwal) {
+                return "Kurang! Total ({$totalBaru} pcs) belum pas dengan stok titipan awal ({$totalAwal} pcs).";
+            }
+
+            return null;
+        };
+
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch.product']))
             ->recordTitleAttribute('productBatch.product.nama')
@@ -120,62 +143,129 @@ class ConsignmentReturnsRelationManager extends RelationManager
                         return \Filament\Tables\Filters\Indicator::make('Periode: ' . $namaBulan . ' ' . $data['tahun']);
                     }),
             ])
-            ->headerActions([
-            ])
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->label('Koreksi')
                     ->color('gray')
-                    ->modalHeading(fn(Model $record) => "Koreksi Riwayat: {$record->productBatch->product->nama} ({$record->productBatch->batch_code})")
+                    ->modalHeading(fn (Model $record) => "Koreksi Riwayat: {$record->productBatch->product->nama} ({$record->productBatch->batch_code})")
+                    ->modalDescription(function (ConsignmentReturn $record) {
+                        $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
+
+                        return "Total rincian di bawah wajib tetap berjumlah {$totalAwal} pcs (sesuai tarikan awal).";
+                    })
                     ->form([
                         Forms\Components\Grid::make(3)
                             ->schema([
                                 Forms\Components\TextInput::make('terjual')
                                     ->label('Terjual (Laku)')
                                     ->numeric()
+                                    ->nullable()
                                     ->minValue(0)
-                                    ->required(),
+                                    ->default(0)
+                                    ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
+                                    ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
+                                        return function (string $attribute, $value, Closure $fail) use ($get, $record, $cekTotalKoreksi) {
+                                            if (blank($value)) $value = 0;
+                                            if ($pesan = $cekTotalKoreksi($get, $record, 'terjual', $value)) {
+                                                $t = (int) $get('terjual');
+                                                $l = (int) $get('qty_layak');
+                                                $r = (int) $get('qty_rusak');
+                                                if ($t === 0 && $l === 0 && $r === 0) {
+                                                    $fail($pesan);
+                                                } else {
+                                                    $lastFilled = $r > 0 ? 'qty_rusak' : ($l > 0 ? 'qty_layak' : 'terjual');
+                                                    if ($lastFilled === 'terjual') $fail($pesan);
+                                                }
+                                            }
+                                        };
+                                    }),
+
                                 Forms\Components\TextInput::make('qty_layak')
                                     ->label('Sisa Layak Jual')
                                     ->numeric()
+                                    ->nullable()
                                     ->minValue(0)
-                                    ->required(),
+                                    ->default(0)
+                                    ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
+                                    ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
+                                        return function (string $attribute, $value, Closure $fail) use ($get, $record, $cekTotalKoreksi) {
+                                            if (blank($value)) $value = 0;
+                                            if ($pesan = $cekTotalKoreksi($get, $record, 'qty_layak', $value)) {
+                                                $t = (int) $get('terjual');
+                                                $l = (int) $get('qty_layak');
+                                                $r = (int) $get('qty_rusak');
+                                                if ($t === 0 && $l === 0 && $r === 0) {
+                                                    $fail($pesan);
+                                                } else {
+                                                    $lastFilled = $r > 0 ? 'qty_rusak' : ($l > 0 ? 'qty_layak' : 'terjual');
+                                                    if ($lastFilled === 'qty_layak') $fail($pesan);
+                                                }
+                                            }
+                                        };
+                                    }),
+
                                 Forms\Components\TextInput::make('qty_rusak')
                                     ->label('Barang Rusak')
                                     ->numeric()
+                                    ->nullable()
                                     ->minValue(0)
-                                    ->required(),
+                                    ->default(0)
+                                    ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
+                                    ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
+                                        return function (string $attribute, $value, Closure $fail) use ($get, $record, $cekTotalKoreksi) {
+                                            if (blank($value)) $value = 0;
+                                            if ($pesan = $cekTotalKoreksi($get, $record, 'qty_rusak', $value)) {
+                                                $t = (int) $get('terjual');
+                                                $l = (int) $get('qty_layak');
+                                                $r = (int) $get('qty_rusak');
+                                                if ($t === 0 && $l === 0 && $r === 0) {
+                                                    $fail($pesan);
+                                                } else {
+                                                    $lastFilled = $r > 0 ? 'qty_rusak' : ($l > 0 ? 'qty_layak' : 'terjual');
+                                                    if ($lastFilled === 'qty_rusak') $fail($pesan);
+                                                }
+                                            }
+                                        };
+                                    }),
                             ]),
                     ])
-                    ->action(function (ConsignmentReturn $record, array $data, Tables\Actions\EditAction $action) {
+                    ->action(function (ConsignmentReturn $record, array $data) {
+                        $terjual = (int) ($data['terjual'] ?? 0);
+                        $layak   = (int) ($data['qty_layak'] ?? 0);
+                        $rusak   = (int) ($data['qty_rusak'] ?? 0);
+                        $totalBaru = $terjual + $layak + $rusak;
                         $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
-                        $totalBaru = $data['terjual'] + $data['qty_layak'] + $data['qty_rusak'];
+
                         if ($totalBaru !== $totalAwal) {
                             Notification::make()
                                 ->danger()
-                                ->title('Koreksi Gagal!')
-                                ->body("Total kuantitas barang baru ({$totalBaru} pcs) tidak sama dengan total awal penarikan ({$totalAwal} pcs). Anda hanya boleh mengubah distribusi kriteria produk.")
+                                ->title('Gagal Mengoreksi Riwayat')
+                                ->body("Total rincian ({$totalBaru} pcs) harus sama persis dengan tarikan awal ({$totalAwal} pcs).")
+                                ->icon('heroicon-o-exclamation-triangle')
                                 ->send();
-                            $action->halt();
+
+                            return;
                         }
-                        DB::transaction(function () use ($record, $data) {
-                            $selisihLayak = $data['qty_layak'] - $record->qty_layak;
+
+                        DB::transaction(function () use ($record, $terjual, $layak, $rusak) {
+                            $selisihLayak = $layak - $record->qty_layak;
                             if ($selisihLayak !== 0) {
                                 $record->productBatch->increment('stok_toko', $selisihLayak);
                             }
                             $record->update([
-                                'terjual'   => $data['terjual'],
-                                'qty_layak' => $data['qty_layak'],
-                                'qty_rusak' => $data['qty_rusak'],
+                                'terjual'   => $terjual,
+                                'qty_layak' => $layak,
+                                'qty_rusak' => $rusak,
                             ]);
                         });
+
                         Notification::make()
                             ->success()
-                            ->title('Riwayat Berhasil Dikoreksi!')
+                            ->title('Koreksi Riwayat Berhasil!')
+                            ->body("Rincian penarikan {$record->productBatch->product->nama} diperbarui (Laku: {$terjual}, Layak: {$layak}, Rusak: {$rusak}).")
+                            ->icon('heroicon-o-check-circle')
                             ->send();
                     }),
-            ])
-            ->bulkActions([
             ]);
     }
 }

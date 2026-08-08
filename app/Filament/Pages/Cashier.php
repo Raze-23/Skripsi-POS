@@ -102,7 +102,14 @@ class Cashier extends Page
         $added = $this->addToCartByBatch($batch);
 
         if ($added) {
-            $this->dispatch('product-added', [['name' => $batch->product->nama]]);
+            Notification::make()
+                ->title('Berhasil ditambahkan')
+                ->body($batch->product->nama . ' · Batch ' . $batch->batch_code)
+                ->success()
+                ->icon('heroicon-o-qr-code')
+                ->iconColor('success')
+                ->duration(2500)
+                ->send();
         }
 
         $this->search = '';
@@ -271,42 +278,83 @@ class Cashier extends Page
         $this->bayar = null;
     }
 
+    public function clearCart()
+    {
+        if (empty($this->cart)) {
+            return;
+        }
+
+        $itemCount = (int) collect($this->cart)->sum('qty');
+
+        $this->resetCart();
+
+        Notification::make()
+            ->title('Keranjang dikosongkan')
+            ->body($itemCount . ' item telah dihapus dari keranjang')
+            ->icon('heroicon-o-trash')
+            ->iconColor('gray')
+            ->color('gray')
+            ->duration(2500)
+            ->send();
+    }
+
     public function submitTransaction()
     {
         if (empty($this->cart)) {
             return;
         }
 
+        $this->diskon = max(0, min(100, (int) $this->diskon));
+
         $uangBayar = (int) $this->bayar ?: 0;
         if ($uangBayar < $this->total_harga) {
-            Notification::make()->danger()->title('Uang Pembayaran Kurang!')->send();
             return;
         }
 
         $this->kembalianAkhir = max(0, $uangBayar - $this->total_harga);
 
-        DB::transaction(function () use ($uangBayar) {
-            $transaction = Transaction::create([
-                'kasir_id' => Auth::id(),
-                'total_harga' => $this->total_harga,
-                'diskon_persen' => (int) $this->diskon ?: 0,
-                'nominal_bayar' => $uangBayar,
-                'nominal_kembalian' => $this->kembalianAkhir,
-                'status' => 'Selesai',
-            ]);
+        try {
+            DB::transaction(function () use ($uangBayar) {
+                foreach ($this->cart as $item) {
+                    $batch = ProductBatch::lockForUpdate()->find($item['id']);
+                    if (!$batch || $batch->stok_toko < $item['qty']) {
+                        $nama = $batch?->product?->nama ?? 'Produk';
+                        throw new \RuntimeException("Stok {$nama} (Batch: {$item['batch_code']}) tidak mencukupi.");
+                    }
+                }
 
-            foreach ($this->cart as $item) {
-                $transaction->details()->create([
-                    'product_batch_id' => $item['id'],
-                    'qty' => $item['qty'],
-                    'subtotal' => $item['subtotal'],
+                $transaction = Transaction::create([
+                    'kasir_id' => Auth::id(),
+                    'total_harga' => $this->total_harga,
+                    'diskon_persen' => (int) $this->diskon ?: 0,
+                    'nominal_bayar' => $uangBayar,
+                    'nominal_kembalian' => $this->kembalianAkhir,
+                    'status' => 'Selesai',
                 ]);
 
-                ProductBatch::find($item['id'])->decrement('stok_toko', $item['qty']);
-            }
+                foreach ($this->cart as $item) {
+                    $transaction->details()->create([
+                        'product_batch_id' => $item['id'],
+                        'qty' => $item['qty'],
+                        'subtotal' => $item['subtotal'],
+                    ]);
 
-            $this->lastTransactionId = $transaction->id;
-        });
+                    ProductBatch::where('id', $item['id'])
+                        ->where('stok_toko', '>=', $item['qty'])
+                        ->decrement('stok_toko', $item['qty']);
+                }
+
+                $this->lastTransactionId = $transaction->id;
+            });
+        } catch (\RuntimeException $e) {
+            Notification::make()
+                ->danger()
+                ->title('Transaksi Gagal!')
+                ->body($e->getMessage() . ' Silakan cek ulang keranjang.')
+                ->icon('heroicon-o-exclamation-triangle')
+                ->send();
+            return;
+        }
 
         $this->resetCart();
         $this->dispatch('transaction-success');

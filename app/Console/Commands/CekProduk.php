@@ -64,7 +64,6 @@ class CekProduk extends Command
                 if ($titipan->stok_titipan <= 0) continue;
 
                 if ($sisaHari < 0) {
-                    // SUDAH KEDALUWARSA di apotek — Peringatan keras
                     Notification::make()
                         ->danger()
                         ->icon('heroicon-o-x-circle')

@@ -24,7 +24,6 @@ class SawPriorityWidget extends Widget
 
         if ($products->isEmpty()) return [];
 
-        // C1: Total Penjualan 
         $kasirSales = DB::table('transaction_details')
             ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
             ->join('product_batches', 'product_batches.id', '=', 'transaction_details.product_batch_id')
@@ -41,13 +40,11 @@ class SawPriorityWidget extends Widget
             ->groupBy('product_batches.product_id')
             ->pluck('total_qty', 'product_id');
 
-        // C3: Umur Batch 
         $nearestExpiry = ProductBatch::where('stok_toko', '>', 0)
             ->select('product_id', DB::raw('MIN(tanggal_kedaluwarsa) as min_expiry'))
             ->groupBy('product_id')
             ->pluck('min_expiry', 'product_id');
 
-        // C4: Total Stok 
         $totalStock = ProductBatch::where('stok_toko', '>', 0)
             ->select('product_id', DB::raw('SUM(stok_toko) as total_stok'))
             ->groupBy('product_id')
@@ -80,7 +77,6 @@ class SawPriorityWidget extends Widget
 
         if (empty($rawData)) return [];
 
-        // Menentukan Nilai Max / Min untuk Normalisasi
         $maxC1 = max(array_column($rawData, 'c1')) ?: 1;
         $maxC2 = max(array_column($rawData, 'c2')) ?: 1;
         $minC3 = min(array_column($rawData, 'c3')) ?: 1;

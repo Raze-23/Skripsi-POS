@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\ProductResource\RelationManagers;
 
 use App\Models\ProductBatch;
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -12,6 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProductDisposalsRelationManager extends RelationManager
 {
@@ -53,7 +56,6 @@ class ProductDisposalsRelationManager extends RelationManager
                     ->color('danger')
                     ->suffix(' pcs')
                     ->alignCenter(),
-
             ])
             ->filters([
                 Tables\Filters\Filter::make('bulan_tahun')
@@ -113,98 +115,152 @@ class ProductDisposalsRelationManager extends RelationManager
                 Tables\Actions\Action::make('buang_stok')
                     ->label('Buang Stok')
                     ->icon('heroicon-o-trash')
-                    ->modalSubmitActionLabel('Buang')
+                    ->modalSubmitActionLabel('Selesaikan Pembuangan')
                     ->modalCancelActionLabel('Kembali')
                     ->color('danger')
                     ->modalHeading(fn() => 'Form Pembuangan: ' . $this->getOwnerRecord()->nama)
+                    ->modalDescription('Catat produk yang rusak, hilang, atau kedaluwarsa. Stok di toko akan otomatis terpotong.')
                     ->form([
                         Forms\Components\Select::make('product_batch_id')
-                            ->label('Pilih Batch')
+                            ->label('Pilih Batch Produk')
+                            ->prefixIcon('heroicon-o-tag')
                             ->options(fn () => $this->getOwnerRecord()->productBatches()
                                 ->where('stok_toko', '>', 0)
                                 ->get()
-                                ->mapWithKeys(fn ($b) => [$b->id => $b->batch_code . ' (Stok: ' . $b->stok_toko . ')'])
+                                ->mapWithKeys(fn ($b) => [$b->id => $b->batch_code . ' (Sisa Stok: ' . $b->stok_toko . ')'])
                             )
+                            ->live()
                             ->required()
-                            ->searchable(),
+                            ->native(false)
+                            ->validationMessages([
+                                'required' => 'Batch produk wajib dipilih.',
+                            ]),
                         Forms\Components\Grid::make(2)->schema([
                             Forms\Components\TextInput::make('jumlah')
                                 ->label('Jumlah Dibuang')
+                                ->prefixIcon('heroicon-o-archive-box-x-mark')
+                                ->suffix('pcs')
                                 ->numeric()
-                                ->minValue(1)
-                                ->required(),
+                                ->default(0)
+                                ->rule('required') 
+                                ->markAsRequired() 
+                                ->rule('min:1')
+                                ->validationMessages([
+                                    'required' => 'Jumlah pembuangan wajib diisi.',
+                                    'min' => 'Jumlah minimal adalah 1 pcs.',
+                                ])
+                                ->rule(static function (Get $get) {
+                                    return static function (string $attribute, $value, Closure $fail) use ($get) {
+                                        $batchId = $get('product_batch_id');
+                                        if ($batchId && $value) {
+                                            $batch = ProductBatch::find($batchId);
+                                            if ($batch && (int) $value > $batch->stok_toko) {
+                                                $fail("Stok tidak cukup! Sisa batch ini hanya {$batch->stok_toko} pcs.");
+                                            }
+                                        }
+                                    };
+                                }),
                             Forms\Components\Select::make('alasan')
-                                ->label('Alasan')
+                                ->label('Alasan Pembuangan')
+                                ->prefixIcon('heroicon-o-exclamation-circle')
                                 ->options([
                                     'Kedaluwarsa' => 'Kedaluwarsa',
                                     'Barang Rusak' => 'Barang Rusak',
-                                    'Hilang' => 'Hilang',
                                 ])
-                                ->required()
-                                ->native(false),
+                                ->required() 
+                                ->native(false)
+                                ->validationMessages([
+                                    'required' => 'Alasan pembuangan wajib dipilih.',
+                                ]),
                         ])
                     ])
-                    ->action(function (array $data, Tables\Actions\Action $action) {
+                    ->action(function (array $data) {
                         $batch = ProductBatch::find($data['product_batch_id']);
-                        if ($data['jumlah'] > $batch->stok_toko) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Stok Tidak Cukup!')
-                                ->body("Anda mencoba membuang {$data['jumlah']} pcs, tetapi stok batch {$batch->batch_code} hanya ada {$batch->stok_toko} pcs.")
-                                ->send();
-                            $action->halt();
+                        $jumlah = (int) $data['jumlah'];
+
+                        if ($jumlah > $batch->stok_toko) {
+                            throw ValidationException::withMessages([
+                                'mountedTableActionData.jumlah' => "Kelebihan kuantitas! Sisa batch ini hanya {$batch->stok_toko} pcs.",
+                            ]);
                         }
-                        DB::transaction(function () use ($batch, $data) {
-                            $batch->decrement('stok_toko', $data['jumlah']);
+
+                        DB::transaction(function () use ($batch, $jumlah, $data) {
+                            $batch->decrement('stok_toko', $jumlah);
                             $batch->productDisposals()->create([
-                                'jumlah' => $data['jumlah'],
+                                'jumlah' => $jumlah,
                                 'alasan' => $data['alasan'],
                             ]);
                         });
+
                         Notification::make()
                             ->success()
-                            ->title('Stok Berhasil Diperbarui!')
-                            ->body('Sisa stok di toko telah dikurangi.')
+                            ->title('Pembuangan Berhasil Dicatat!')
+                            ->body('Stok produk di rak toko telah dipotong secara otomatis.')
+                            ->icon('heroicon-o-trash')
                             ->send();
                     })
                     ->hidden(fn(): bool => $this->getOwnerRecord()->productBatches()->sum('stok_toko') <= 0),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->label('Edit')
-                    ->color('warning')
+                    ->label('Koreksi')
+                    ->color('success')
                     ->modalHeading('Koreksi Riwayat Stok')
+                    ->modalDescription('Ubah data pembuangan jika terjadi salah input. Stok akan otomatis disesuaikan ulang.')
                     ->form([
                         Forms\Components\Grid::make(2)->schema([
                             Forms\Components\TextInput::make('jumlah')
                                 ->label('Jumlah Sebenarnya')
+                                ->prefixIcon('heroicon-o-pencil-square')
+                                ->suffix('pcs')
                                 ->numeric()
-                                ->minValue(1)
-                                ->required()
-                                ->helperText('Otomatis sesuaikan stok rak.'),
+                                ->rule('required')
+                                ->markAsRequired() 
+                                ->rule('min:1')
+                                ->helperText('Masukkan total fisik produk yang benar-benar dibuang.')
+                                ->validationMessages([
+                                    'required' => 'Jumlah sebenarnya wajib diisi.',
+                                    'min' => 'Jumlah minimal adalah 1 pcs.',
+                                ])
+                                ->rule(static function (Get $get, Model $record) {
+                                    return static function (string $attribute, $value, Closure $fail) use ($record) {
+                                        if (!$value) return; 
+                                        
+                                        $batch = $record->productBatch;
+                                        $oldJumlah = $record->jumlah;
+                                        $newJumlah = (int) $value;
+                                        $diff = $newJumlah - $oldJumlah;
+
+                                        if ($diff > 0 && $batch->stok_toko < $diff) {
+                                            $fail("Gagal! Anda menambah buangan {$diff} pcs, tapi sisa stok batch hanya {$batch->stok_toko} pcs.");
+                                        }
+                                    };
+                                }),
                             Forms\Components\Select::make('alasan')
-                                ->label('Alasan')
+                                ->label('Alasan Pembuangan')
+                                ->prefixIcon('heroicon-o-exclamation-circle')
                                 ->options([
                                     'Kedaluwarsa' => 'Kedaluwarsa',
                                     'Barang Rusak' => 'Barang Rusak',
                                     'Hilang' => 'Hilang',
                                 ])
                                 ->required()
-                                ->native(false),
+                                ->native(false)
+                                ->validationMessages([
+                                    'required' => 'Alasan pembuangan wajib dipilih.',
+                                ]),
                         ])
                     ])
-                    ->action(function (Model $record, array $data, Tables\Actions\EditAction $action) {
+                    ->action(function (Model $record, array $data) {
                         $batch = $record->productBatch;
                         $oldJumlah = $record->jumlah;
-                        $newJumlah = $data['jumlah'];
+                        $newJumlah = (int) $data['jumlah'];
                         $diff = $newJumlah - $oldJumlah;
+
                         if ($diff > 0 && $batch->stok_toko < $diff) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Stok Tidak Cukup!')
-                                ->body("Koreksi gagal. Anda mencoba menambah buangan {$diff} pcs, tetapi sisa stok batch hanya {$batch->stok_toko} pcs.")
-                                ->send();
-                            $action->halt();
+                            throw ValidationException::withMessages([
+                                'mountedTableActionData.jumlah' => "Koreksi gagal. Sisa stok toko ({$batch->stok_toko} pcs) tidak cukup untuk menutupi tambahan {$diff} pcs.",
+                            ]);
                         }
 
                         DB::transaction(function () use ($batch, $record, $data, $diff, $newJumlah) {
@@ -223,9 +279,29 @@ class ProductDisposalsRelationManager extends RelationManager
                         Notification::make()
                             ->success()
                             ->title('Koreksi Berhasil!')
-                            ->body('Riwayat pembuangan dan stok di toko akan di perbarui')
+                            ->body('Riwayat pembuangan dan sisa stok toko telah dikalibrasi.')
+                            ->icon('heroicon-o-clipboard-document-check')
                             ->send();
                     }),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Batal Buang')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('danger')
+                    ->modalHeading('Batalkan Pembuangan')
+                    ->modalDescription('Apakah Anda yakin ingin membatalkan riwayat ini? Stok yang sebelumnya dibuang akan dikembalikan sepenuhnya ke rak toko.')
+                    ->modalSubmitActionLabel('Ya, Kembalikan Stok')
+                    ->before(function (Model $record) {
+                        DB::transaction(function () use ($record) {
+                            $record->productBatch->increment('stok_toko', $record->jumlah);
+                        });
+                    })
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title('Pembuangan Dibatalkan')
+                            ->body('Riwayat dihapus dan stok telah berhasil dikembalikan ke toko.')
+                            ->icon('heroicon-o-check-circle')
+                    ),
             ]);
     }
 }

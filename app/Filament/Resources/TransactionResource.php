@@ -140,6 +140,7 @@ class TransactionResource extends Resource
                         ->label('Cetak Nota')
                         ->icon('heroicon-o-printer')
                         ->color('success')
+                        ->visible(fn (?Transaction $record) => $record !== null && $record->status !== 'Batal')
                         ->action(function (Transaction $record, $livewire) {
                             $url = route('print.nota', $record->id);
                             $livewire->js("
@@ -180,6 +181,7 @@ class TransactionResource extends Resource
                                 ->title('Transaksi Dibatalkan')
                                 ->body('Status diubah menjadi Batal dan stok telah dikembalikan.')
                                 ->success()
+                                ->icon('heroicon-o-check-circle')
                                 ->send();
                         }),
                 ]),

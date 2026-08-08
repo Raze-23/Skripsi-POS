@@ -128,9 +128,14 @@
 
 
                             devices.forEach(cam => {
+                                let labelKamera = (cam.label || '').toLowerCase();
+
+                                if (labelKamera.includes('obs') || labelKamera.includes('virtual')) {
+                                    return;
+                                }
+
                                 let option = document.createElement('option');
                                 option.value = cam.id;
-
                                 option.text = cam.label ? cam.label.split('(')[0].trim() : `Kamera ${cam.id}`;
                                 if (cam.id === selectedCameraId) option.selected = true;
                                 cameraSwitcher.appendChild(option);
@@ -164,10 +169,15 @@
                     html5QrCode.start(
                         cameraId,
                         {
-                            fps: 25,
-                            qrbox: { width: 280, height: 280 },
+                            fps: 30,
+                            qrbox: { width: 250, height: 250 },
                             aspectRatio: 1.0,
-                            disableFlip: false
+                            disableFlip: false,
+                            videoConstraints: {
+                                width: { min: 640, ideal: 720, max: 1280 },
+                                height: { min: 480, ideal: 720, max: 720 },
+                                facingMode: "environment"
+                            }
                         },
                         (decodedText) => {
                             const now = Date.now();
@@ -296,8 +306,12 @@
             showToast('Keranjang dibersihkan', 'warn');
         });
 
+        // Notifikasi "Pembayaran berhasil" sengaja tidak ditampilkan lagi di sini,
+        // karena modal struk (.receipt-panel) sudah menjadi satu-satunya konfirmasi
+        // sukses yang ditampilkan ke kasir setelah transaksi selesai.
         Livewire.on('transaction-success', () => {
-            showToast('Pembayaran berhasil', 'success');
+            // no-op: dibiarkan terdaftar untuk jaga-jaga kalau event ini
+            // dipakai bagian lain di masa depan.
         });
 
         Livewire.on('cart-updated', ({ message }) => {

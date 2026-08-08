@@ -7,19 +7,22 @@ use App\Filament\Resources\ProductResource\Actions\ExportCsvAllAction;
 use App\Filament\Resources\ProductResource\Actions\ExportCsvSelectedBulkAction;
 use App\Filament\Resources\ProductResource\Actions\ExportPdfAction;
 use App\Filament\Resources\ProductResource\Actions\GenerateQRCodeAllAction;
+use App\Filament\Resources\ProductResource\Actions\SafeDeleteBulkAction;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Filament\Resources\ProductResource\RelationManagers\ProductBatchesRelationManager;
 use App\Filament\Resources\ProductResource\RelationManagers\ProductDisposalsRelationManager;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use Carbon\Carbon;
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Collection;
 
 class ProductResource extends Resource
 {
@@ -45,34 +48,53 @@ class ProductResource extends Resource
                                 ->schema([
                                     Forms\Components\Group::make([
                                         Forms\Components\TextInput::make('nama')
-                                            ->required()
-                                            ->maxLength(255),
-                                        Forms\Components\TextInput::make('estimasi_masak')
-                                            ->label('Estimasi Waktu Pembuatan')
-                                            ->numeric()
-                                            ->required()
-                                            ->suffix('Hari')
-                                            ->default(0)
-                                            ->minValue(0),
-                                    ])->columnSpan(2),
+                                            ->rule('required')
+                                            ->markAsRequired()
+                                            ->unique(ignoreRecord: true)
+                                            ->maxLength(255)
+                                            ->validationMessages([
+                                                'required' => 'Nama produk wajib diisi.',
+                                                'unique' => 'Nama produk ini sudah terdaftar!',
+                                            ]),
+                                    Forms\Components\TextInput::make('estimasi_masak')
+                                        ->label('Estimasi Waktu Pembuatan')
+                                        ->numeric()
+                                        ->rule('required')
+                                        ->markAsRequired()
+                                        ->suffix('Jam')
+                                        ->minValue(1)
+                                        ->validationMessages([
+                                            'required' => 'Estimasi waktu pembuatan wajib diisi.',
+                                            'min' => 'Estimasi waktu tidak boleh 0, minimal harus 1 jam!',
+                                        ]),
+                                        Forms\Components\Toggle::make('is_discontinued')
+                                            ->label('Telah Berhenti Produksi')
+                                            ->helperText('Tandai jika produk ini sudah tidak diproduksi lagi.')
+                                            ->default(false),
+                                    ])
+                                        ->columnSpan(2),
                                     Forms\Components\FileUpload::make('foto')
                                         ->image()
                                         ->directory('products')
                                         ->optimize('webp')
                                         ->resize(50)
-                                        ->columnSpan(3)
-                                ])
+                                        ->columnSpan(3),
+                                ]),
                         ]),
                     Forms\Components\Wizard\Step::make('Harga')
                         ->icon('heroicon-o-banknotes')
                         ->schema([
                             Forms\Components\TextInput::make('harga_beli')
                                 ->numeric()
-                                ->required()
+                                ->rule('required')
+                                ->markAsRequired()
                                 ->prefix('Rp')
                                 ->label('Modal')
+                                ->validationMessages([
+                                    'required' => 'Harga Modal wajib diisi.',
+                                ])
                                 ->rule(static function (Get $get) {
-                                    return static function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    return static function (string $attribute, $value, Closure $fail) use ($get) {
                                         $hargaJual = $get('harga_jual');
                                         if ($hargaJual !== null && $value >= $hargaJual) {
                                             $fail('Harga Modal tidak boleh lebih dari Harga Jual!');
@@ -81,18 +103,25 @@ class ProductResource extends Resource
                                 }),
                             Forms\Components\TextInput::make('harga_jual')
                                 ->numeric()
-                                ->required()
+                                ->rule('required')
+                                ->markAsRequired()
                                 ->prefix('Rp')
+                                ->validationMessages([
+                                    'required' => 'Harga Jual wajib diisi.',
+                                ])
                                 ->rule(static function (Get $get) {
-                                    return static function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    return static function (string $attribute, $value, Closure $fail) use ($get) {
                                         $hargaBeli = $get('harga_beli');
                                         if ($hargaBeli !== null && $value <= $hargaBeli) {
                                             $fail('Harga Jual harus lebih besar dari Harga Modal!');
                                         }
                                     };
                                 }),
-                        ])->columns(2),
-                ])->columnSpanFull()
+                        ])
+                            ->columns(2),
+                ])
+                    ->skippable(false)
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -100,9 +129,17 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('foto')->circular()
-                    ->default(asset('images/notfound.png')),
-                Tables\Columns\TextColumn::make('nama')->searchable(),
+                Tables\Columns\ImageColumn::make('foto')
+                    ->circular()
+                    ->default(asset('images/notfound.png'))
+                    ->extraImgAttributes(fn ($record) => [
+                        'style' => $record->is_discontinued ? 'filter: grayscale(100%); opacity: 0.6;' : '',
+                    ]),
+                Tables\Columns\TextColumn::make('nama')
+                    ->searchable()
+                    ->description(fn ($record) => $record->is_discontinued ? 'Telah Berhenti Produksi' : null)
+                    ->color(fn ($record) => $record->is_discontinued ? 'danger' : 'default')
+                    ->weight(fn ($record) => $record->is_discontinued ? 'bold' : 'default'),
                 Tables\Columns\TextColumn::make('estimasi_masak')
                     ->label('Waktu Produksi')
                     ->suffix(' Menit')
@@ -112,51 +149,73 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('product_batches_sum_stok_toko')
                     ->label('Total Stok')
                     ->badge()
-                    ->color(fn($state): string => ($state ?? 0) < 10 ? 'danger' : 'success')
+                    ->color(fn ($state): string => ($state ?? 0) < 10 ? 'danger' : 'success')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('product_batches_min_tanggal_kedaluwarsa')
                     ->label('Kedaluwarsa Terdekat')
                     ->date('d M Y')
                     ->badge()
                     ->color(function ($state): string {
-                        if (!$state) return 'gray';
+                        if (! $state) {
+                            return 'gray';
+                        }
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
                         return match (true) {
-                            $daysLeft < 7  => 'danger',
+                            $daysLeft < 7 => 'danger',
                             $daysLeft < 30 => 'warning',
                             $daysLeft < 60 => 'info',
-                            default        => 'success',
+                            default => 'success',
                         };
                     })
                     ->icon(function ($state): string {
-                        if (!$state) return 'heroicon-o-minus';
+                        if (! $state) {
+                            return 'heroicon-o-minus';
+                        }
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
                         return match (true) {
-                            $daysLeft < 7  => 'heroicon-o-x-circle',
+                            $daysLeft < 7 => 'heroicon-o-x-circle',
                             $daysLeft < 30 => 'heroicon-o-exclamation-triangle',
                             $daysLeft < 60 => 'heroicon-o-clock',
-                            default        => 'heroicon-o-shield-check',
+                            default => 'heroicon-o-shield-check',
                         };
                     })
                     ->sortable(),
                 Tables\Columns\TextColumn::make('product_batches_count')
                     ->label('Jumlah Batch')
-                    ->counts('productBatches')
                     ->badge()
                     ->color('gray')
                     ->alignCenter(),
             ])
-            ->modifyQueryUsing(fn ($query) => $query
-                ->withSum('productBatches', 'stok_toko')
-                ->withMin('productBatches', 'tanggal_kedaluwarsa')
+            ->modifyQueryUsing(
+                fn ($query) => $query
+                    ->withCount([
+                        'productBatches' => fn ($q) => $q->where('stok_toko', '>', 0),
+                    ])
+                    ->withSum([
+                        'productBatches' => fn ($q) => $q->where('stok_toko', '>', 0),
+                    ], 'stok_toko')
+                    ->withMin([
+                        'productBatches' => fn ($q) => $q->where('stok_toko', '>', 0),
+                    ], 'tanggal_kedaluwarsa')
             )
-            ->filters([
-            ])
+            ->filters([])
             ->actions([
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\ViewAction::make(),
                     Tables\Actions\EditAction::make(),
-                    Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\DeleteAction::make()
+                        ->before(function ($record, Tables\Actions\DeleteAction $action) {
+                            if ($record->productBatches()->exists()) {
+                                Notification::make()
+                                    ->danger()
+                                    ->title('Gagal Menghapus')
+                                    ->body('Produk ini tidak dapat dihapus karena masih memiliki riwayat Batch Produk yang terikat.')
+                                    ->icon('heroicon-o-exclamation-triangle')
+                                    ->send();
+
+                                $action->halt();
+                            }
+                        }),
                 ]),
             ])
             ->headerActions([
@@ -167,7 +226,7 @@ class ProductResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     ExportCsvSelectedBulkAction::make(),
-                    Tables\Actions\DeleteBulkAction::make(),
+                    SafeDeleteBulkAction::make(),
                 ]),
             ]);
     }

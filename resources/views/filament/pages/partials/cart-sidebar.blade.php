@@ -79,39 +79,84 @@
             <span class="total-val">Rp {{ number_format($this->totalHarga ?? 0, 0, ',', '.') }}</span>
         </div>
 
+        @php
+            $uangBayar = (int) ($bayar ?? 0) ?: 0;
+            $hasCart = ! empty($cart);
+            $totalTagihan = (int) ($this->total_harga ?? 0);
+            $kembalian = (int) ($this->kembalian ?? 0);
+            $showStatus = $hasCart && $uangBayar > 0;
+            $isShortage = $showStatus && $kembalian < 0;
+            $isExact = $showStatus && $kembalian === 0;
+            $isSurplus = $showStatus && $kembalian > 0;
+            $isDisabled = ! $hasCart || $uangBayar < $totalTagihan;
+            $disabledReason = match (true) {
+                default => null,
+            };
+
+            $cashRing = $isShortage ? '#fca5a5' : ($showStatus ? '#6ee7b7' : null);
+        @endphp
+
         <div>
             <div style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:5px;">Uang Diterima</div>
-            <div class="cash-wrap">
+            <div class="cash-wrap transition-shadow duration-150"
+                style="{{ $cashRing ? 'box-shadow: 0 0 0 1.5px ' . $cashRing . ' inset; border-radius: 8px;' : '' }}">
                 <span class="cash-prefix">Rp</span>
                 <input type="number" wire:model.live.debounce.500ms="bayar" class="cash-input" placeholder="0"
                     min="0" />
             </div>
         </div>
 
-        @php $uangBayar = (int) $bayar ?: 0; @endphp
-        @if ($uangBayar > 0 && !empty($cart))
-            @if ($this->kembalian < 0)
-                <div class="change-badge shortage">
-                    <span>Kurang</span>
-                    <span>Rp {{ number_format(abs($this->kembalian), 0, ',', '.') }}</span>
+        <div role="status" aria-live="polite">
+            @if ($isShortage)
+                <div class="change-badge shortage flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 transition-colors">
+                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                            <path d="M12 9v4" />
+                            <path d="M12 17h.01" />
+                            <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78A1.5 1.5 0 0 0 22.18 18L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z" />
+                        </svg>
+                    </span>
+                    <div class="flex flex-1 items-center justify-between">
+                        <span class="text-[11px] font-semibold text-red-500">Kurang bayar</span>
+                        <span class="text-sm font-bold text-red-600">Rp {{ number_format(abs($this->kembalian), 0, ',', '.') }}</span>
+                    </div>
                 </div>
-            @elseif($this->kembalian === 0)
-                <div class="change-badge exact">
-                    <span>Pas</span>
-                    <span>Rp 0</span>
+            @elseif ($isExact)
+                <div class="change-badge exact flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 transition-colors">
+                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+                        </svg>
+                    </span>
+                    <div class="flex flex-1 items-center justify-between">
+                        <span class="text-[11px] font-semibold text-emerald-600">Pas, tanpa kembalian</span>
+                        <span class="text-sm font-bold text-emerald-700">Rp 0</span>
+                    </div>
+                </div>
+            @elseif ($isSurplus)
+                <div class="change-badge surplus flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 transition-colors">
+                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                            <rect x="2.5" y="6.5" width="19" height="11" rx="2" />
+                            <circle cx="12" cy="12" r="2.5" />
+                        </svg>
+                    </span>
+                    <div class="flex flex-1 items-center justify-between">
+                        <span class="text-[11px] font-semibold text-blue-500">Kembalian</span>
+                        <span class="text-sm font-bold text-blue-700">Rp {{ number_format($this->kembalian, 0, ',', '.') }}</span>
+                    </div>
                 </div>
             @else
-                <div class="change-badge surplus">
-                    <span>Kembalian</span>
-                    <span>Rp {{ number_format($this->kembalian, 0, ',', '.') }}</span>
-                </div>
+                <div style="height:32px;"></div>
             @endif
-        @else
-            <div style="height:32px;"></div>
-        @endif
+        </div>
 
         <button wire:click="submitTransaction" class="submit-btn" wire:loading.attr="disabled"
-            @if (empty($cart) || $uangBayar < $this->total_harga) disabled @endif type="button">
+            @if ($isDisabled) disabled @endif type="button">
             <svg style="width:17px;height:17px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                 stroke-width="2.5">
                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -119,5 +164,16 @@
             </svg>
             Selesaikan Pembayaran
         </button>
+        @if ($disabledReason)
+            <p class="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] font-medium text-red-500" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 8v4.5" />
+                    <path d="M12 16h.01" />
+                </svg>
+                {{ $disabledReason }}
+            </p>
+        @endif
     </div>
 </div>

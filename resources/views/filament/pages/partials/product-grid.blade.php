@@ -9,7 +9,7 @@
                     d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
             </svg>
 
-            <input type="text" wire:model.live.debounce.300ms="search" wire:keydown.enter="scanQRCode"
+            <input type="text" wire:model="search" wire:keydown.enter="scanQRCode"
                 placeholder="Cari produk atau scan batch code..." class="pos-search-input w-full" style="padding-left:36px;" autofocus />
         </div>
 

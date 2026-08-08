@@ -40,12 +40,20 @@ class PartnerResource extends Resource
                             ->schema([
                                 Forms\Components\TextInput::make('nama_apotek')
                                     ->label('Nama Apotek')
-                                    ->required()
-                                    ->maxLength(255),
+                                    ->rule('required') // Memaksa validasi teks merah backend
+                                    ->markAsRequired() // Tetap memunculkan bintang merah (*)
+                                    ->maxLength(255)
+                                    ->validationMessages([
+                                        'required' => 'Nama apotek wajib diisi.',
+                                    ]),
                                 Forms\Components\Textarea::make('alamat')
                                     ->label('Alamat Lengkap')
-                                    ->required()
-                                    ->rows(3),
+                                    ->rule('required') // Memaksa validasi teks merah backend
+                                    ->markAsRequired()
+                                    ->rows(3)
+                                    ->validationMessages([
+                                        'required' => 'Alamat lengkap apotek wajib diisi.',
+                                    ]),
                             ])
                             ->columnSpan(2),
                         Forms\Components\Group::make()
@@ -55,16 +63,15 @@ class PartnerResource extends Resource
                                         Forms\Components\TextInput::make('no_telp')
                                             ->label('Nomor WhatsApp')
                                             ->tel()
-                                            ->required()
-                                            ->minLength(10)
-                                            ->maxLength(13)
-                                            ->regex('/^[0-9]+$/')
-                                            ->rules(['starts_with:08,62'])
+                                            ->rule('required') // Ganti required()
+                                            ->markAsRequired()
+                                            ->rule('min:10') // Ganti minLength() agar tidak muncul pop-up browser
+                                            ->maxLength(15) // maxLength aman, hanya membatasi ketikan
+                                            ->rule('regex:/^(\+62|62|08)[0-9]+$/') // Ganti regex() agar browser tidak membaca attribut pattern HTML5
                                             ->validationMessages([
-                                                'starts_with' => 'Nomor WhatsApp harus diawali dengan awalan 08 atau 62.',
-                                                'min' => 'Nomor WhatsApp tidak valid, minimal 10 digit.',
-                                                'max' => 'Nomor WhatsApp terlalu panjang, maksimal 13 digit.',
-                                                'regex' => 'Nomor WhatsApp hanya boleh berisi angka.',
+                                                'required' => 'Nomor WhatsApp wajib diisi.',
+                                                'min' => 'Nomor telepon tidak valid, minimal 10 digit.',
+                                                'regex' => 'Format tidak valid. Harus berupa angka dan diawali dengan 08, 62, atau +62.',
                                             ]),
                                         Forms\Components\Toggle::make('is_active')
                                             ->label('Status Kemitraan')
@@ -77,9 +84,13 @@ class PartnerResource extends Resource
                                 DatePicker::make('tanggal_kerja_sama')
                                     ->label('Kerja Sama Sejak')
                                     ->default(now())
-                                    ->required()
+                                    ->rule('required') // Memaksa validasi teks merah backend
+                                    ->markAsRequired()
                                     ->native(false)
                                     ->displayFormat('d F Y')
+                                    ->validationMessages([
+                                        'required' => 'Tanggal awal kerja sama wajib diisi.',
+                                    ])
                             ])
                             ->columnSpan(1),
                     ]),

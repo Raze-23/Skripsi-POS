@@ -5,11 +5,13 @@ namespace App\Filament\Resources\ProductResource\RelationManagers;
 use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -21,19 +23,60 @@ class ProductBatchesRelationManager extends RelationManager
     public function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\Grid::make(2)->schema([
-                Forms\Components\TextInput::make('stok_toko')
-                    ->label('Stok Awal')
-                    ->numeric()
-                    ->required()
-                    ->default(0)
-                    ->minValue(0),
-                Forms\Components\DatePicker::make('tanggal_kedaluwarsa')
-                    ->label('Tanggal Kedaluwarsa')
-                    ->required()
-                    ->native(false)
-                    ->displayFormat('d/m/Y'),
-            ]),
+            Forms\Components\Section::make('Informasi Batch')
+                ->description('Catat jumlah stok dan tanggal kedaluwarsa untuk batch produksi ini.')
+                ->icon('heroicon-o-cube')
+                ->schema([
+                    Forms\Components\TextInput::make('stok_toko')
+                        ->label('Jumlah Stok')
+                        ->numeric()
+                        ->default(0)
+                        ->rules(['required', 'min:1'])
+                        ->markAsRequired(true)
+                        ->autofocus()
+                        ->prefixIcon('heroicon-o-archive-box')
+                        ->suffix('Pcs')
+                        ->disabled(function (?Model $record) {
+                            if (! $record) {
+                                return false; 
+                            }
+                            
+                            $hasDisposals = $record->productDisposals()->exists();
+                            $hasConsignments = $record->consignmentStocks()->exists();
+                            
+                            return $hasDisposals || $hasConsignments;
+                        })
+                        ->helperText(function (?Model $record) {
+                            if (! $record) {
+                                return 'Jumlah unit yang akan masuk ke stok toko untuk batch ini.';
+                            }
+                            
+                            $hasDisposals = $record->productDisposals()->exists();
+                            $hasConsignments = $record->consignmentStocks()->exists();
+                            
+                            if ($hasDisposals || $hasConsignments) {
+                                return '🔒 Terkunci (sudah ada riwayat).';
+                            }
+                            
+                            return 'Jumlah unit yang akan masuk ke stok toko untuk batch ini.';
+                        })
+                        ->validationMessages([
+                            'required' => 'Jumlah stok wajib diisi.',
+                            'min' => 'Jumlah stok minimal 1.',
+                            'min.numeric' => 'Jumlah stok minimal 1.',
+                        ]),
+                    Forms\Components\DatePicker::make('tanggal_kedaluwarsa')
+                        ->label('Tanggal Kedaluwarsa')
+                        ->rules(['required'])
+                        ->markAsRequired(true)
+                        ->native(false)
+                        ->closeOnDateSelection()
+                        ->displayFormat('d/m/Y')
+                        ->prefixIcon('heroicon-o-calendar-days')
+                        ->minDate(now())
+                        ->helperText('Pilih tanggal kedaluwarsa produk pada batch ini.')
+                ])
+                ->columns(2),
         ]);
     }
 
@@ -96,13 +139,37 @@ class ProductBatchesRelationManager extends RelationManager
                             ->success()
                             ->title('Batch Berhasil Dibuat')
                             ->body('Data produksi batch baru telah masuk ke dalam sistem dan siap didistribusikan.')
+                            ->icon('heroicon-o-check-badge')
                     ),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->hidden(fn ($record) => $record->stok_toko <= 0),
+                    ->hidden(fn ($record) => $record->stok_toko <= 0)
+                    ->successNotification(
+                        Notification::make()
+                            ->success()
+                            ->title('Berhasil Diperbarui')
+                            ->body('Data berhasil diperbarui dan disimpan!')
+                            ->icon('heroicon-o-document-check')
+                    ),
                 Tables\Actions\DeleteAction::make()
-                    ->hidden(fn ($record) => $record->stok_toko <= 0),
+                    ->hidden(fn ($record) => $record->stok_toko <= 0)
+                    ->before(function ($record, Tables\Actions\DeleteAction $action) {
+                        if (
+                            $record->productDisposals()->exists() ||
+                            $record->consignmentStocks()->exists() ||
+                            $record->consignmentReturns()->exists() ||
+                            $record->transactionDetails()->exists()
+                        ) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Gagal Menghapus')
+                                ->body('Batch ini tidak dapat dihapus karena sudah memiliki riwayat transaksi, konsinyasi, atau pembuangan.')
+                                ->send();
+                            
+                            $action->halt();
+                        }
+                    }),
             ]);
     }
 }

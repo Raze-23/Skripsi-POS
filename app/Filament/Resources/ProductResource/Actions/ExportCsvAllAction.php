@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ProductResource\Actions;
 
 use App\Models\ProductBatch;
+use Filament\Notifications\Notification;
 use Filament\Tables\Actions\Action;
 
 class ExportCsvAllAction
@@ -14,6 +15,16 @@ class ExportCsvAllAction
             ->icon('heroicon-o-document-plus')
             ->color('success')
             ->action(function () {
+                if (! ProductBatch::exists()) {
+                    Notification::make()
+                        ->warning()
+                        ->title('Tidak Ada Stok Produk')
+                        ->body('Belum ada data batch produk untuk diekspor ke CSV.')
+                        ->send();
+
+                    return;
+                }
+
                 return response()->streamDownload(function () {
                     $file = fopen('php://output', 'w');
                     fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
