@@ -18,7 +18,7 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 class ProductBatchesRelationManager extends RelationManager
 {
     protected static string $relationship = 'productBatches';
-    protected static ?string $title = 'Batch Produksi';
+    protected static ?string $title = 'Batch Produk';
 
     public function form(Form $form): Form
     {
@@ -55,7 +55,7 @@ class ProductBatchesRelationManager extends RelationManager
                             $hasConsignments = $record->consignmentStocks()->exists();
                             
                             if ($hasDisposals || $hasConsignments) {
-                                return '🔒 Terkunci (sudah ada riwayat).';
+                                return '🔒 Terkunci';
                             }
                             
                             return 'Jumlah unit yang akan masuk ke stok toko untuk batch ini.';
@@ -73,7 +73,7 @@ class ProductBatchesRelationManager extends RelationManager
                         ->closeOnDateSelection()
                         ->displayFormat('d/m/Y')
                         ->prefixIcon('heroicon-o-calendar-days')
-                        ->minDate(now())
+                        ->minDate(today())
                         ->helperText('Pilih tanggal kedaluwarsa produk pada batch ini.')
                 ])
                 ->columns(2),
@@ -83,6 +83,7 @@ class ProductBatchesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->heading('Daftar Batch Produk') 
             ->modifyQueryUsing(fn (Builder $query) => $query->where('stok_toko', '>', 0))
             ->recordTitleAttribute('batch_code')
             ->defaultSort('created_at', 'desc')
@@ -128,7 +129,7 @@ class ProductBatchesRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->filters([
-                //
+
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
@@ -169,7 +170,14 @@ class ProductBatchesRelationManager extends RelationManager
                             
                             $action->halt();
                         }
-                    }),
+                    })
+                    ->successNotification(
+                        Notification::make()
+                            ->danger()
+                            ->title('Batch Berhasil Dihapus!')
+                            ->body('Data batch produk telah dihapus secara permanen dari sistem.')
+                            ->icon('heroicon-o-trash')
+                    ),
             ]);
     }
 }

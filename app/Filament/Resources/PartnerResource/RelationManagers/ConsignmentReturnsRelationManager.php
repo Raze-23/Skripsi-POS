@@ -14,12 +14,11 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ConsignmentReturnsRelationManager extends RelationManager
 {
     protected static string $relationship = 'consignmentReturns';
-    protected static ?string $title = 'Riwayat penarikan';
+    protected static ?string $title = 'Riwayat Penarikan';
 
     public function form(Form $form): Form
     {
@@ -49,36 +48,49 @@ class ConsignmentReturnsRelationManager extends RelationManager
         };
 
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch.product']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch.product', 'sales']))
             ->recordTitleAttribute('productBatch.product.nama')
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Waktu Penarikan')
                     ->dateTime('d M Y, H:i')
-                    ->sortable(),
+                    ->sortable()
+                    ->icon('heroicon-o-calendar-days')
+                    ->color('gray'),
+                
+                Tables\Columns\TextColumn::make('sales.nama')
+                    ->label('Nama Sales')
+                    ->icon('heroicon-o-identification')
+                    ->searchable()
+                    ->sortable()
+                    ->default('-'),
+
                 Tables\Columns\TextColumn::make('productBatch.product.nama')
                     ->label('Nama Produk')
                     ->searchable()
-                    ->weight('bold'),
-                Tables\Columns\TextColumn::make('productBatch.batch_code')
-                    ->label('Kode Batch')
-                    ->fontFamily('mono')
-                    ->color('gray'),
+                    ->weight('bold')
+                    ->description(fn (Model $record): string => $record->productBatch?->batch_code ?? '-'),
                 Tables\Columns\TextColumn::make('terjual')
                     ->label('Terjual')
                     ->badge()
                     ->color('success')
+                    ->icon('heroicon-o-currency-dollar')
+                    ->suffix(' pcs')
                     ->alignCenter(),
                 Tables\Columns\TextColumn::make('qty_layak')
                     ->label('Layak')
                     ->badge()
                     ->color('info')
+                    ->icon('heroicon-o-arrow-path')
+                    ->suffix(' pcs')
                     ->alignCenter(),
                 Tables\Columns\TextColumn::make('qty_rusak')
                     ->label('Rusak')
                     ->badge()
                     ->color('danger')
+                    ->icon('heroicon-o-archive-box-x-mark')
+                    ->suffix(' pcs')
                     ->alignCenter(),
                 Tables\Columns\TextColumn::make('omzet_terbentuk')
                     ->label('Omzet')
@@ -86,8 +98,10 @@ class ConsignmentReturnsRelationManager extends RelationManager
                     ->state(function (ConsignmentReturn $record): float {
                         return $record->terjual * ($record->productBatch->product->harga_jual ?? 0);
                     })
+                    ->icon('heroicon-o-banknotes')
                     ->color('primary')
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->sortable(),
             ])
             ->filters([
                 Tables\Filters\Filter::make('bulan_tahun')
@@ -160,7 +174,7 @@ class ConsignmentReturnsRelationManager extends RelationManager
                                     ->label('Terjual (Laku)')
                                     ->numeric()
                                     ->nullable()
-                                    ->minValue(0)
+                                    ->rule('min:0')
                                     ->default(0)
                                     ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
                                     ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
@@ -184,7 +198,7 @@ class ConsignmentReturnsRelationManager extends RelationManager
                                     ->label('Sisa Layak Jual')
                                     ->numeric()
                                     ->nullable()
-                                    ->minValue(0)
+                                    ->rule('min:0')
                                     ->default(0)
                                     ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
                                     ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
@@ -208,7 +222,7 @@ class ConsignmentReturnsRelationManager extends RelationManager
                                     ->label('Barang Rusak')
                                     ->numeric()
                                     ->nullable()
-                                    ->minValue(0)
+                                    ->rule('min:0')
                                     ->default(0)
                                     ->extraInputAttributes(['x-on:blur' => "\$el.value === '' ? (\$el.value = '0', \$el.dispatchEvent(new Event('input'))) : null"])
                                     ->rule(function (Get $get, Model $record) use ($cekTotalKoreksi) {
@@ -257,12 +271,23 @@ class ConsignmentReturnsRelationManager extends RelationManager
                                 'qty_layak' => $layak,
                                 'qty_rusak' => $rusak,
                             ]);
+                            
+                            if ($rusak > 0) {
+                                $record->productDisposals()->updateOrCreate([], [
+                                    'product_batch_id' => $record->product_batch_id,
+                                    'jumlah' => $rusak,
+                                    'alasan' => 'Barang Rusak',
+                                    'sumber' => 'Apotek',
+                                ]);
+                            } else {
+                                $record->productDisposals()->delete();
+                            }
                         });
 
                         Notification::make()
                             ->success()
                             ->title('Koreksi Riwayat Berhasil!')
-                            ->body("Rincian penarikan {$record->productBatch->product->nama} diperbarui (Laku: {$terjual}, Layak: {$layak}, Rusak: {$rusak}).")
+                            ->body("Rincian penarikan {$record->productBatch->product->nama} diperbarui (Laku: {$terjual}, Layak Jual: {$layak}, Rusak: {$rusak}).")
                             ->icon('heroicon-o-check-circle')
                             ->send();
                     }),

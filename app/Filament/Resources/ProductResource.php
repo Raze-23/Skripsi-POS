@@ -22,7 +22,6 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection;
 
 class ProductResource extends Resource
 {
@@ -56,28 +55,31 @@ class ProductResource extends Resource
                                                 'required' => 'Nama produk wajib diisi.',
                                                 'unique' => 'Nama produk ini sudah terdaftar!',
                                             ]),
-                                    Forms\Components\TextInput::make('estimasi_masak')
+                                        Forms\Components\TextInput::make('estimasi_masak')
                                         ->label('Estimasi Waktu Pembuatan')
                                         ->numeric()
                                         ->rule('required')
                                         ->markAsRequired()
-                                        ->suffix('Jam')
+                                        ->suffix('Menit')
                                         ->minValue(1)
                                         ->validationMessages([
                                             'required' => 'Estimasi waktu pembuatan wajib diisi.',
-                                            'min' => 'Estimasi waktu tidak boleh 0, minimal harus 1 jam!',
+                                            'min' => 'Estimasi waktu tidak boleh 0!',
                                         ]),
                                         Forms\Components\Toggle::make('is_discontinued')
                                             ->label('Telah Berhenti Produksi')
                                             ->helperText('Tandai jika produk ini sudah tidak diproduksi lagi.')
-                                            ->default(false),
+                                            ->default(false)
+                                            ->hiddenOn('create'),
                                     ])
                                         ->columnSpan(2),
                                     Forms\Components\FileUpload::make('foto')
                                         ->image()
+                                        ->imageEditor()
+                                        ->imageResizeMode('cover')
+                                        ->imageResizeTargetWidth('800')
+                                        ->imageResizeTargetHeight('800')
                                         ->directory('products')
-                                        ->optimize('webp')
-                                        ->resize(50)
                                         ->columnSpan(3),
                                 ]),
                         ]),
@@ -215,7 +217,14 @@ class ProductResource extends Resource
 
                                 $action->halt();
                             }
-                        }),
+                        })
+                        ->successNotification(
+                            Notification::make()
+                                ->danger()
+                                ->title('Produk Berhasil Dihapus!')
+                                ->body('Data produk telah dihapus secara permanen dari sistem toko.')
+                                ->icon('heroicon-o-trash')
+                        ),
                 ]),
             ])
             ->headerActions([

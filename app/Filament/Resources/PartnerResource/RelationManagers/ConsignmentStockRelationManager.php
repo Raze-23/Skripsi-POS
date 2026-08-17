@@ -2,8 +2,11 @@
 
 namespace App\Filament\Resources\PartnerResource\RelationManagers;
 
+use App\Models\ConsignmentDelivery;
 use App\Models\ConsignmentReturn;
 use App\Models\ProductBatch;
+use App\Models\ProductDisposal;
+use App\Models\Sales; 
 use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -15,7 +18,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ConsignmentStockRelationManager extends RelationManager
 {
@@ -30,7 +32,6 @@ class ConsignmentStockRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch.product']))
             ->recordTitleAttribute('productBatch.product.nama')
@@ -58,9 +59,22 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->icon('heroicon-o-truck')
                     ->color('primary')
                     ->modalHeading('Kirim Stok ke Mitra')
-                    ->modalDescription('Kirim stok untuk mitra apotek.')
+                    ->modalDescription('Kirim stok untuk mitra apotek dan catat sales yang mengantarnya.')
                     ->modalSubmitActionLabel('Kirim Produk')
                     ->form([
+                        Forms\Components\Select::make('sales_id')
+                            ->label('Nama Sales Pengirim')
+                            ->prefixIcon('heroicon-o-identification')
+                            ->options(fn () => Sales::where('is_active', true)->pluck('nama', 'id'))
+                            ->searchable()
+                            ->preload()
+                            ->rule('required')
+                            ->markAsRequired()
+                            ->native(false)
+                            ->validationMessages([
+                                'required' => 'Identitas Sales wajib dipilih.',
+                            ]),
+
                         Forms\Components\Grid::make(2)->schema([
                             Forms\Components\Select::make('product_batch_id')
                                 ->label('Pilih Batch Produk')
@@ -73,15 +87,21 @@ class ConsignmentStockRelationManager extends RelationManager
                                 ->searchable()
                                 ->preload()
                                 ->live()
-                                ->required(),
+                                ->rule('required')
+                                ->markAsRequired()
+                                ->native(false)
+                                ->validationMessages([
+                                    'required' => 'Batch produk wajib dipilih.',
+                                ]),
 
                             Forms\Components\TextInput::make('jumlah')
                                 ->label('Jumlah Dikirim')
                                 ->prefixIcon('heroicon-o-cube')
                                 ->suffix('pcs')
                                 ->numeric()
-                                ->required()
-                                ->minValue(1)
+                                ->rule('required')
+                                ->markAsRequired()
+                                ->rule('min:1')
                                 ->default(1)
                                 ->validationMessages([
                                     'required' => 'Jumlah kirim wajib diisi.',
@@ -103,15 +123,24 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->action(function (array $data) {
                         $batch = ProductBatch::find($data['product_batch_id']);
                         $jumlah = (int) ($data['jumlah'] ?? 0);
+                        $salesId = $data['sales_id'];
 
-                        DB::transaction(function () use ($batch, $jumlah) {
+                        DB::transaction(function () use ($batch, $jumlah, $salesId) {
                             $batch->decrement('stok_toko', $jumlah);
+            
                             $consignment = $this->getOwnerRecord()->consignmentStocks()
                                 ->firstOrCreate(
                                     ['product_batch_id' => $batch->id],
                                     ['stok_titipan' => 0]
                                 );
                             $consignment->increment('stok_titipan', $jumlah);
+
+                            ConsignmentDelivery::create([
+                                'partner_id' => $this->getOwnerRecord()->id,
+                                'product_batch_id' => $batch->id,
+                                'sales_id' => $salesId,
+                                'jumlah' => $jumlah,
+                            ]);
                         });
 
                         Notification::make()
@@ -132,6 +161,20 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->modalSubmitActionLabel('Selesaikan Penarikan')
                     ->modalCancelActionLabel('Tutup')
                     ->form([
+                        Forms\Components\Select::make('sales_id')
+                            ->label('Nama Sales Penarik')
+                            ->prefixIcon('heroicon-o-identification')
+                            ->options(fn () => Sales::where('is_active', true)->pluck('nama', 'id'))
+                            ->searchable()
+                            ->preload()
+                            ->rule('required')
+                            ->markAsRequired()
+                            ->native(false)
+                            ->validationMessages([
+                                'required' => 'Identitas Sales wajib dipilih.',
+                            ])
+                            ->columnSpanFull(),
+
                         Forms\Components\Grid::make(3)
                             ->schema([
                                 Forms\Components\TextInput::make('terjual')
@@ -139,9 +182,14 @@ class ConsignmentStockRelationManager extends RelationManager
                                     ->prefixIcon('heroicon-o-currency-dollar')
                                     ->suffix('pcs')
                                     ->numeric()
-                                    ->required()
-                                    ->minValue(0)
+                                    ->rule('required')
+                                    ->markAsRequired()
+                                    ->rule('min:0')
                                     ->default(0)
+                                    ->validationMessages([
+                                        'required' => 'Wajib diisi.',
+                                        'min' => 'Minimal 0.',
+                                    ])
                                     ->helperText('Uang masuk.'),
 
                                 Forms\Components\TextInput::make('qty_layak')
@@ -149,9 +197,14 @@ class ConsignmentStockRelationManager extends RelationManager
                                     ->prefixIcon('heroicon-o-arrow-path')
                                     ->suffix('pcs')
                                     ->numeric()
-                                    ->required()
-                                    ->minValue(0)
+                                    ->rule('required')
+                                    ->markAsRequired()
+                                    ->rule('min:0')
                                     ->default(0)
+                                    ->validationMessages([
+                                        'required' => 'Wajib diisi.',
+                                        'min' => 'Minimal 0.',
+                                    ])
                                     ->helperText('Kembali ke rak toko.'),
 
                                 Forms\Components\TextInput::make('qty_rusak')
@@ -159,9 +212,14 @@ class ConsignmentStockRelationManager extends RelationManager
                                     ->prefixIcon('heroicon-o-archive-box-x-mark')
                                     ->suffix('pcs')
                                     ->numeric()
-                                    ->required()
-                                    ->minValue(0)
+                                    ->rule('required')
+                                    ->markAsRequired()
+                                    ->rule('min:0')
                                     ->default(0)
+                                    ->validationMessages([
+                                        'required' => 'Wajib diisi.',
+                                        'min' => 'Minimal 0.',
+                                    ])
                                     ->helperText('Dibuang & catat rugi.'),
                             ]),
                     ])
@@ -169,32 +227,45 @@ class ConsignmentStockRelationManager extends RelationManager
                         $terjual = (int) ($data['terjual'] ?? 0);
                         $layak   = (int) ($data['qty_layak'] ?? 0);
                         $rusak   = (int) ($data['qty_rusak'] ?? 0);
+                        $salesId = $data['sales_id'];
                         
                         $total = $terjual + $layak + $rusak;
 
                         if ($total !== $record->stok_titipan) {
                             Notification::make()
                                 ->danger()
-                                ->title('Total Rincian Tidak Sesuai!')
-                                ->body("Total (Terjual + Layak + Rusak) harus tepat {$record->stok_titipan} pcs. Saat ini hitungan Anda adalah {$total} pcs.")
+                                ->title('Jumlah Tidak Pas!')
+                                ->body("Total rincian ({$total} pcs) harus persis dengan sisa stok ({$record->stok_titipan} pcs).")
                                 ->send();
 
                             $action->halt(); 
                         }
 
-                        DB::transaction(function () use ($record, $terjual, $layak, $rusak) {
+                        DB::transaction(function () use ($record, $terjual, $layak, $rusak, $salesId) {
                             if ($layak > 0) {
                                 $record->productBatch->increment('stok_toko', $layak);
                             }
 
-                            ConsignmentReturn::create([
+                            $return = ConsignmentReturn::create([
                                 'partner_id' => $this->getOwnerRecord()->id,
                                 'product_batch_id' => $record->product_batch_id,
+                                'sales_id' => $salesId,
                                 'terjual'    => $terjual,
                                 'qty_layak'  => $layak,
                                 'qty_rusak'  => $rusak,
                                 'omzet_terbentuk' => 0,
                             ]);
+
+
+                            if ($rusak > 0) {
+                                ProductDisposal::create([
+                                    'product_batch_id'      => $record->product_batch_id,
+                                    'jumlah'                => $rusak,
+                                    'alasan'                => 'Barang Rusak',
+                                    'sumber'                => 'Apotek',
+                                    'consignment_return_id' => $return->id,
+                                ]);
+                            }
 
                             $record->delete();
                         });

@@ -12,7 +12,7 @@ class SafeDeleteBulkAction
     {
         return DeleteBulkAction::make()
             ->before(function (Collection $records, DeleteBulkAction $action) {
-                // Cek apakah di antara produk yang dipilih ada yang sudah memiliki batch
+
                 $hasBatches = $records->filter(fn ($record) => $record->productBatches()->exists())->isNotEmpty();
 
                 if ($hasBatches) {

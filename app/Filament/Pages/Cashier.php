@@ -45,12 +45,18 @@ class Cashier extends Page
     {
         return Product::query()
             ->when($this->search, function ($query) {
-                $query->where('nama', 'like', '%' . $this->search . '%')
-                    ->orWhereHas('productBatches', fn($q) => $q->where('batch_code', 'like', '%' . $this->search . '%'));
+                $keyword = '%' . strtolower(trim($this->search)) . '%';
+                $query->where(function ($q) use ($keyword) {
+                    $q->whereRaw('LOWER(nama) LIKE ?', [$keyword])
+                        ->orWhereHas(
+                            'productBatches',
+                            fn ($qb) => $qb->whereRaw('LOWER(batch_code) LIKE ?', [$keyword])
+                        );
+                });
             })
             ->whereHas('productBatches', fn($q) => $q->where('stok_toko', '>', 0))
             ->with(['productBatches' => fn($q) => $q->where('stok_toko', '>', 0)->orderBy('tanggal_kedaluwarsa')])
-            ->limit(12)
+            ->orderBy('nama')
             ->get();
     }
 
@@ -79,7 +85,7 @@ class Cashier extends Page
     #[On('process-qrcode')]
     public function scanQRCode($sku = null)
     {
-        $skuTarget = trim($sku ?? $this->search);
+        $skuTarget = trim($sku);
         if (empty($skuTarget)) return;
 
         $batch = ProductBatch::with('product')
@@ -92,27 +98,24 @@ class Cashier extends Page
                 ->first();
         }
 
-        if (!$batch) {
-            $this->dispatch('play-error-beep');
-            $this->dispatch('stock-warning', [['name' => 'Kode batch ' . $skuTarget . ' tidak ditemukan']]);
-            $this->search = '';
+        if ($batch) {
+            $added = $this->addToCartByBatch($batch);
+
+            if ($added && $sku !== null) {
+                Notification::make()
+                    ->title('Berhasil masuk ke keranjang')
+                    ->body($batch->product->nama . ' · Batch ' . $batch->batch_code)
+                    ->success()
+                    ->icon('heroicon-o-qr-code')
+                    ->iconColor('success')
+                    ->duration(2500)
+                    ->send();
+            }
             return;
         }
 
-        $added = $this->addToCartByBatch($batch);
-
-        if ($added) {
-            Notification::make()
-                ->title('Berhasil ditambahkan')
-                ->body($batch->product->nama . ' · Batch ' . $batch->batch_code)
-                ->success()
-                ->icon('heroicon-o-qr-code')
-                ->iconColor('success')
-                ->duration(2500)
-                ->send();
-        }
-
-        $this->search = '';
+        $this->dispatch('play-error-beep');
+        $this->dispatch('stock-warning', [['name' => 'Barcode "' . $skuTarget . '" tidak dikenali']]);
     }
 
     public function addToCart($productId): bool

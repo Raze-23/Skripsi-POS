@@ -8,6 +8,8 @@
     let lastScanTime = 0;
     let isStarting = false;
     let isFromScanner = false;
+    let preferredCameraId = null; 
+    let blankFeedTimer = null;
 
 
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -109,21 +111,28 @@
 
                         let selectedCameraId = devices[0].id;
 
+                        const preferredStillExists = preferredCameraId &&
+                            devices.some(cam => cam.id === preferredCameraId);
+
+                        if (preferredStillExists) {
+                            selectedCameraId = preferredCameraId;
+                        }
 
                         if (devices.length > 1 && cameraSwitcher) {
                             cameraSwitcher.style.display = 'block';
                             cameraSwitcher.innerHTML = '';
 
+                            if (!preferredStillExists) {
+                                let externalCam = devices.find(device =>
+                                    device.label.toLowerCase().includes('usb') ||
+                                    device.label.toLowerCase().includes('external') ||
+                                    device.label.toLowerCase().includes('webcam') ||
+                                    device.label.toLowerCase().includes('hd')
+                                );
 
-                            let externalCam = devices.find(device =>
-                                device.label.toLowerCase().includes('usb') ||
-                                device.label.toLowerCase().includes('external') ||
-                                device.label.toLowerCase().includes('webcam') ||
-                                device.label.toLowerCase().includes('hd')
-                            );
-
-                            if (externalCam) {
-                                selectedCameraId = externalCam.id;
+                                if (externalCam) {
+                                    selectedCameraId = externalCam.id;
+                                }
                             }
 
 
@@ -144,6 +153,7 @@
 
                             cameraSwitcher.onchange = function() {
                                 if (html5QrCode && scannerRunning) {
+                                    preferredCameraId = this.value; // ingat pilihan manual user
                                     isStarting = true;
                                     html5QrCode.stop().then(() => {
                                         scannerRunning = false;
@@ -154,7 +164,8 @@
                         } else if (cameraSwitcher) {
                             cameraSwitcher.style.display = 'none';
                         }
-                        
+
+                        preferredCameraId = selectedCameraId; // catat kamera yang benar-benar dipakai
                         startScannerEngine(selectedCameraId);
 
                     } else {
@@ -174,6 +185,7 @@
                             aspectRatio: 1.0,
                             disableFlip: false,
                             videoConstraints: {
+                                deviceId: { exact: cameraId },
                                 width: { min: 640, ideal: 720, max: 1280 },
                                 height: { min: 480, ideal: 720, max: 720 },
                                 facingMode: "environment"
@@ -203,9 +215,20 @@
                     ).then(() => {
                         scannerRunning = true;
                         isStarting = false;
+                        watchForBlankFeed(readerEl);
                     }).catch((err) => {
                         showCameraError(err, readerEl, errorBox);
                     });
+                }
+
+                function watchForBlankFeed(readerEl) {
+                    clearTimeout(blankFeedTimer);
+                    blankFeedTimer = setTimeout(() => {
+                        const videoEl = readerEl.querySelector('video');
+                        if (scannerRunning && videoEl && videoEl.readyState < 2) {
+                            showToast('Layar kamera kosong? Coba ganti kamera di atas.', 'warn');
+                        }
+                    }, 4000);
                 }
 
 
@@ -220,6 +243,8 @@
                         pesanError = "Izin kamera ditolak!<br><br>Klik <b>ikon 🔒 Gembok</b> di sebelah URL di atas, pilih <b>Izinkan Kamera (Allow)</b>, lalu Refresh (F5).";
                     } else if (err.name === "NotFoundError") {
                         pesanError = "Tidak ada perangkat kamera yang terdeteksi di perangkat Anda.";
+                    } else if (err.name === "OverconstrainedError") {
+                        pesanError = "Kamera yang dipilih tidak lagi tersedia (mungkin sudah dicabut/ditutup).<br><br>Silakan pilih kamera lain dari daftar, atau Refresh (F5).";
                     }
 
                     readerEl.style.display = 'none';
@@ -238,6 +263,7 @@
         const modal = document.getElementById('qrcode-scanner-modal');
         if(modal) modal.classList.remove('open');
 
+        clearTimeout(blankFeedTimer);
         scanCooldown = false;
         lastScannedCode = '';
         isStarting = false;
@@ -306,12 +332,8 @@
             showToast('Keranjang dibersihkan', 'warn');
         });
 
-        // Notifikasi "Pembayaran berhasil" sengaja tidak ditampilkan lagi di sini,
-        // karena modal struk (.receipt-panel) sudah menjadi satu-satunya konfirmasi
-        // sukses yang ditampilkan ke kasir setelah transaksi selesai.
         Livewire.on('transaction-success', () => {
-            // no-op: dibiarkan terdaftar untuk jaga-jaga kalau event ini
-            // dipakai bagian lain di masa depan.
+
         });
 
         Livewire.on('cart-updated', ({ message }) => {

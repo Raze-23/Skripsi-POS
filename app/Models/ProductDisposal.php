@@ -15,4 +15,9 @@ class ProductDisposal extends Model
     {
         return $this->belongsTo(ProductBatch::class);
     }
+
+    public function consignmentReturn()
+    {
+        return $this->belongsTo(ConsignmentReturn::class);
+    }
 }

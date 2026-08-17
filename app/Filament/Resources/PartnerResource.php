@@ -40,15 +40,15 @@ class PartnerResource extends Resource
                             ->schema([
                                 Forms\Components\TextInput::make('nama_apotek')
                                     ->label('Nama Apotek')
-                                    ->rule('required') // Memaksa validasi teks merah backend
-                                    ->markAsRequired() // Tetap memunculkan bintang merah (*)
+                                    ->rule('required') 
+                                    ->markAsRequired() 
                                     ->maxLength(255)
                                     ->validationMessages([
                                         'required' => 'Nama apotek wajib diisi.',
                                     ]),
                                 Forms\Components\Textarea::make('alamat')
                                     ->label('Alamat Lengkap')
-                                    ->rule('required') // Memaksa validasi teks merah backend
+                                    ->rule('required') 
                                     ->markAsRequired()
                                     ->rows(3)
                                     ->validationMessages([
@@ -61,15 +61,12 @@ class PartnerResource extends Resource
                                 Forms\Components\Section::make('Kontak & Status')
                                     ->schema([
                                         Forms\Components\TextInput::make('no_telp')
-                                            ->label('Nomor WhatsApp')
+                                            ->label('Nomor Telepon')
                                             ->tel()
-                                            ->rule('required') // Ganti required()
-                                            ->markAsRequired()
-                                            ->rule('min:10') // Ganti minLength() agar tidak muncul pop-up browser
-                                            ->maxLength(15) // maxLength aman, hanya membatasi ketikan
-                                            ->rule('regex:/^(\+62|62|08)[0-9]+$/') // Ganti regex() agar browser tidak membaca attribut pattern HTML5
+                                            ->rule('min:10')
+                                            ->maxLength(15)
+                                            ->rule('regex:/^(\+62|62|08)[0-9]+$/') 
                                             ->validationMessages([
-                                                'required' => 'Nomor WhatsApp wajib diisi.',
                                                 'min' => 'Nomor telepon tidak valid, minimal 10 digit.',
                                                 'regex' => 'Format tidak valid. Harus berupa angka dan diawali dengan 08, 62, atau +62.',
                                             ]),
@@ -83,14 +80,9 @@ class PartnerResource extends Resource
                                     ]),
                                 DatePicker::make('tanggal_kerja_sama')
                                     ->label('Kerja Sama Sejak')
-                                    ->default(now())
-                                    ->rule('required') // Memaksa validasi teks merah backend
-                                    ->markAsRequired()
+                                    ->default(today())
                                     ->native(false)
                                     ->displayFormat('d F Y')
-                                    ->validationMessages([
-                                        'required' => 'Tanggal awal kerja sama wajib diisi.',
-                                    ])
                             ])
                             ->columnSpan(1),
                     ]),
@@ -107,7 +99,7 @@ class PartnerResource extends Resource
                     ->sortable()
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('no_telp')
-                    ->label('Nomor Telpon')
+                    ->label('Nomor Telepon')
                     ->icon('heroicon-m-phone')
                     ->copyable()
                     ->color('gray'),

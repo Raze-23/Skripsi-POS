@@ -1,5 +1,5 @@
 <div>
-    <div id="qrcode-scanner-modal" wire:ignore.self>
+    <div id="qrcode-scanner-modal" wire:ignore>
         <div class="scanner-overlay-backdrop" onclick="closeQRCodeScanner()"></div>
         <div class="scanner-panel-wrap">
             <div class="scanner-panel">

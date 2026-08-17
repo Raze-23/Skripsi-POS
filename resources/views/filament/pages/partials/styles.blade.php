@@ -90,6 +90,7 @@
     .pos-product-grid {
         display: grid !important;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+        grid-auto-rows: max-content !important;
         gap: 8px !important;
         overflow-y: auto;
         flex: 1;
@@ -951,6 +952,10 @@
     @keyframes scanFlash {
         0% { opacity: 1; }
         100% { opacity: 0; }
+    }
+    
+    .fi-no {
+        z-index: 999999 !important;
     }
 
     #qrcode-reader__scan_region::after {

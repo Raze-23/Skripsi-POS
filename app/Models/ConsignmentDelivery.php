@@ -4,16 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class ConsignmentReturn extends Model
+class ConsignmentDelivery extends Model
 {
     protected $fillable = [
         'partner_id',
         'product_batch_id',
-        'sales_id',
-        'terjual',
-        'qty_layak',
-        'qty_rusak',
-        'omzet_terbentuk',
+        'sales_id', 
+        'jumlah',
     ];
 
     public function partner()
@@ -26,7 +23,7 @@ class ConsignmentReturn extends Model
         return $this->belongsTo(ProductBatch::class);
     }
 
-    public function sales() 
+    public function sales()
     {
         return $this->belongsTo(Sales::class, 'sales_id');
     }

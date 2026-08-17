@@ -187,6 +187,9 @@ class TransactionResource extends Resource
                 ]),
             ])
             ->bulkActions([
+            ])
+            ->headerActions([
+                \App\Filament\Resources\TransactionResource\Actions\ExportTransactionCsvAction::make(),
             ]);
     }
 

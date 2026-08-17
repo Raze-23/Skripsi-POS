@@ -77,7 +77,7 @@ class StatsOverview extends BaseWidget
 
             Stat::make('Laba Bersih', $formatRupiah($labaBersih))
                 ->color($labaBersih >= 0 ? 'info' : 'danger')
-                ->description($labaBersih >= 0 ? 'Untung' : 'Defisit')
+                ->description($labaBersih >= 0 ? 'Untung' : 'Rugi')
                 ->descriptionIcon($labaBersih >= 0 ? 'heroicon-m-banknotes' : 'heroicon-m-exclamation-triangle')
                 ->chart([2, -1, 3, 5, 8, 12, 16]),
         ];

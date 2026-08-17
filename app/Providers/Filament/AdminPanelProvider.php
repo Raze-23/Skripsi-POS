@@ -64,7 +64,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->databaseNotifications()
+            ->databaseNotifications(fn () => filament()->auth()->user()?->role === 'admin')
             ->databaseNotificationsPolling('30s')
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
@@ -75,6 +75,25 @@ class AdminPanelProvider extends PanelProvider
                         color: white !important;
                     }
                 </style>',
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string =>
+                '<script>
+                    function fixNativeValidation() {
+                        document.querySelectorAll("form:not([novalidate])").forEach(function (form) {
+                            form.setAttribute("novalidate", "novalidate");
+                        });
+                    }
+
+                    document.addEventListener("DOMContentLoaded", fixNativeValidation);
+                    document.addEventListener("livewire:navigated", fixNativeValidation);
+
+                    new MutationObserver(fixNativeValidation).observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                    });
+                </script>',
             );
     }
 }

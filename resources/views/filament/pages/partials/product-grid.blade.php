@@ -9,8 +9,8 @@
                     d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0Z" />
             </svg>
 
-            <input type="text" wire:model="search" wire:keydown.enter="scanQRCode"
-                placeholder="Cari produk atau scan batch code..." class="pos-search-input w-full" style="padding-left:36px;" autofocus />
+            <input type="text" wire:model.live="search"
+                placeholder="Cari nama produk..." class="pos-search-input w-full" style="padding-left:36px;" autofocus />
         </div>
 
         <button onclick="openQRCodeScanner()" class="pos-scan-btn" type="button">
@@ -27,11 +27,8 @@
                 $totalStok = $product->productBatches->sum('stok_toko');
                 $nearestExpiry = $product->productBatches->min('tanggal_kedaluwarsa');
                 $isExpired = $nearestExpiry && \Carbon\Carbon::parse($nearestExpiry)->lt(now()->startOfDay());
-                $isDisabled = $totalStok <= 0 || $isExpired;
             @endphp
-            <div @if(!$isDisabled) wire:click="addToCart({{ $product->id }})" @endif
-                 class="product-card"
-                 style="{{ $isDisabled ? 'opacity: 0.5; filter: grayscale(100%); cursor: not-allowed !important;' : '' }}">
+            <div @if(!$isExpired) wire:click="addToCart({{ $product->id }})" @endif class="product-card" style="{{ $isExpired ? 'opacity: 0.5; filter: grayscale(100%); cursor: not-allowed !important;' : '' }}">
 
                 <div class="product-img">
                     @if ($product->foto)
@@ -50,13 +47,9 @@
                         <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
                             <span style="background:#dc2626; color:#fff; font-size:11px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">KEDALUWARSA</span>
                         </div>
-                    @elseif ($totalStok <= 0)
-                        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.7); z-index:11;">
-                            <span style="background:#ef4444; color:#fff; font-size:12px; font-weight:800; padding:6px 12px; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">HABIS</span>
-                        </div>
                     @endif
 
-                    @if ($totalStok > 0 && !$isExpired)
+                    @if (!$isExpired)
                         <div style="position:absolute; top:8px; right:8px; display:flex; gap:4px; z-index:10;">
                             <span style="background:#10b981; color:#fff; font-size:10px; font-weight:700; padding:4px 8px; border-radius:6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                                 Stok: {{ $totalStok }}
@@ -67,7 +60,7 @@
 
                 <div class="product-body">
                     <div class="product-name">{{ $product->nama }}</div>
-                    <div class="product-price" style="{{ $isDisabled ? 'color:#6b7280;' : '' }}">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</div>
+                    <div class="product-price" style="{{ $isExpired ? 'color:#6b7280;' : '' }}">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</div>
                 </div>
 
             </div>

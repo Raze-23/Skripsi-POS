@@ -29,22 +29,38 @@ class ProductDisposalsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch']))
+            ->heading('Riwayat Pembuangan Produk') 
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['productBatch', 'consignmentReturn.partner']))
             ->recordTitleAttribute('alasan')
             ->defaultSort('product_disposals.created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Tanggal')
                     ->dateTime('d M Y, H:i')
-                    ->sortable(),
+                    ->sortable()
+                    ->icon('heroicon-o-calendar-days')
+                    ->color('gray'),
+                Tables\Columns\TextColumn::make('sumber')
+                    ->label('Asal')
+                    ->badge()
+                    ->color(fn (?string $state): string => $state === 'Apotek' ? 'warning' : 'gray')
+                    ->formatStateUsing(fn (?string $state): string => $state === 'Apotek' ? 'Apotek' : 'Toko'),
                 Tables\Columns\TextColumn::make('productBatch.batch_code')
                     ->label('Batch')
                     ->fontFamily('mono')
-                    ->color('gray'),
+                    ->color('gray')
+                    ->icon('heroicon-o-tag')
+                    ->tooltip(fn (Model $record): string => $record->productBatch?->product?->nama ?? '-'),
                 Tables\Columns\TextColumn::make('alasan')
                     ->label('Alasan')
                     ->badge()
-                    ->color(fn(string $state): string => match ($state) {
+                    ->icon(fn (string $state): string => match ($state) {
+                        'Kedaluwarsa (Expired)', 'Kedaluwarsa' => 'heroicon-o-clock',
+                        'Kemasan Rusak', 'Barang Rusak' => 'heroicon-o-archive-box-x-mark',
+                        'Hilang / Selisih ', 'Hilang' => 'heroicon-o-question-mark-circle',
+                        default => 'heroicon-o-exclamation-circle',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
                         'Kedaluwarsa (Expired)', 'Kedaluwarsa' => 'danger',
                         'Kemasan Rusak', 'Barang Rusak' => 'warning',
                         'Hilang / Selisih ', 'Hilang' => 'gray',
@@ -54,10 +70,18 @@ class ProductDisposalsRelationManager extends RelationManager
                     ->label('Jumlah Dibuang')
                     ->badge()
                     ->color('danger')
+                    ->icon('heroicon-o-trash')
                     ->suffix(' pcs')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->sortable(),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('sumber')
+                    ->label('Asal')
+                    ->options([
+                        'Toko' => 'Toko',
+                        'Apotek' => 'Apotek',
+                    ]),
                 Tables\Filters\Filter::make('bulan_tahun')
                     ->form([
                         Forms\Components\Grid::make(2)->schema([
@@ -189,12 +213,13 @@ class ProductDisposalsRelationManager extends RelationManager
                             $batch->productDisposals()->create([
                                 'jumlah' => $jumlah,
                                 'alasan' => $data['alasan'],
+                                'sumber' => 'Toko',
                             ]);
                         });
 
                         Notification::make()
-                            ->success()
-                            ->title('Pembuangan Berhasil Dicatat!')
+                            ->danger()
+                            ->title('Produk Berhasil Dihapus!')
                             ->body('Stok produk di rak toko telah dipotong secara otomatis.')
                             ->icon('heroicon-o-trash')
                             ->send();
@@ -205,6 +230,7 @@ class ProductDisposalsRelationManager extends RelationManager
                 Tables\Actions\EditAction::make()
                     ->label('Koreksi')
                     ->color('success')
+                    ->visible(fn (Model $record): bool => $record->sumber !== 'Apotek')
                     ->modalHeading('Koreksi Riwayat Stok')
                     ->modalDescription('Ubah data pembuangan jika terjadi salah input. Stok akan otomatis disesuaikan ulang.')
                     ->form([
@@ -287,6 +313,7 @@ class ProductDisposalsRelationManager extends RelationManager
                     ->label('Batal Buang')
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('danger')
+                    ->visible(fn (Model $record): bool => $record->sumber !== 'Apotek')
                     ->modalHeading('Batalkan Pembuangan')
                     ->modalDescription('Apakah Anda yakin ingin membatalkan riwayat ini? Stok yang sebelumnya dibuang akan dikembalikan sepenuhnya ke rak toko.')
                     ->modalSubmitActionLabel('Ya, Kembalikan Stok')
