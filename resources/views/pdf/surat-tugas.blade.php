@@ -30,7 +30,7 @@
                     @endif
                     <div class="brand-contact">
                         Jl. Kutilang, Kerten, Kec. Laweyan, Kota Surakarta, Jawa Tengah<br>
-                        Telp: 0812-3672-1367
+                        Telp: +62-882-9847-1715
                     </div>
                 </td>
                 <td class="col-date">

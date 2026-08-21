@@ -27,8 +27,14 @@
 
     <div class="ticket">
         <div class="text-center">
+            {{-- <img src="{{ asset('images/logo-attiin.png') }}" style="width: 80px; margin-bottom: 8px; filter: grayscale(100%);"> --}}
             <div class="store-name">CV. Herbal At-Tiin</div>
-            <div class="store-desc">Jl. Kutilang, Kerten, Kec. Laweyan<br>Kota Surakarta</div>
+            <div class="store-desc">
+                Jl. Kutilang, Kerten, Kec. Laweyan<br>
+                Kota Surakarta<br>
+                Telp: +62-882-9847-1715<br>
+                IG: @attiin.herbal
+            </div>
         </div>
 
         <div class="divider"></div>
