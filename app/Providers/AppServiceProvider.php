@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse as LoginResponseContract;
 use App\Http\Responses\LoginResponse;
@@ -18,5 +19,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (env('APP_ENV') === 'production') {
+            URL::forceScheme('https');
+        }
     }
 }

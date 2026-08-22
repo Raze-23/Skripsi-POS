@@ -16,7 +16,7 @@ Route::get('/admin/print-surat-tugas-otomatis', function () {
         })
         ->get();
     if ($stocks->isEmpty()) {
-        abort(404, 'Luar biasa! Saat ini tidak ada barang yang perlu ditarik dari Apotek manapun.');
+        abort(404, 'Saat ini tidak ada barang yang perlu ditarik dari Apotek manapun.');
     }
     $stocks = $stocks->groupBy('partner.nama_apotek');
     return view('pdf.surat-tugas-penarikan', compact('stocks'));

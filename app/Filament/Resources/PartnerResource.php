@@ -21,7 +21,7 @@ class PartnerResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-s-home-modern';
 
     protected static ?string $cluster = Stock::class;
-
+ 
     protected static ?string $navigationLabel = 'Apotek';
 
     protected static ?string $breadCrumb = 'Stok';
@@ -113,6 +113,22 @@ class PartnerResource extends Resource
                     ->falseIcon('heroicon-o-x-circle')
                     ->trueColor('success')
                     ->falseColor('danger'),
+                Tables\Columns\TextColumn::make('jumlah_kedaluwarsa')
+                    ->label('Kedaluwarsa')
+                    ->state(function (Partner $record): int {
+                        return $record->consignmentStocks()
+                            ->where('stok_titipan', '>', 0)
+                            ->whereHas('productBatch', function ($q) {
+                                $q->whereNotNull('tanggal_kedaluwarsa')
+                                  ->whereDate('tanggal_kedaluwarsa', '<=', now());
+                            })
+                            ->count();
+                    })
+                    ->badge()
+                    ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->alignCenter()
+                    ->default(0),
             ])
             ->filters([
             ])
