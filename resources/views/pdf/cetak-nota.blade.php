@@ -23,11 +23,21 @@
                     'subtotal' => $group->sum('subtotal'),
                 ];
             });
+        $logoPath = public_path('images/logo-attiin.png');
+        if (!file_exists($logoPath)) {
+            $logoPath = base_path('../public_html/images/logo-attiin.png');
+        }
+        if (!file_exists($logoPath) && isset($_SERVER['DOCUMENT_ROOT'])) {
+            $logoPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/images/logo-attiin.png';
+        }
+        $logoBase64 = file_exists($logoPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) : '';
     @endphp
 
     <div class="ticket">
         <div class="text-center">
-            {{-- <img src="{{ asset('images/logo-attiin.png') }}" style="width: 80px; margin-bottom: 8px; filter: grayscale(100%);"> --}}
+            @if($logoBase64)
+                <img src="{{ $logoBase64 }}" style="width: 80px; margin-bottom: 8px; filter: grayscale(100%);">
+            @endif
             <div class="store-name">CV. Herbal At-Tiin</div>
             <div class="store-desc">
                 Jl. Kutilang, Kerten, Kec. Laweyan<br>

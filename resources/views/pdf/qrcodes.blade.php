@@ -17,10 +17,13 @@
         <div class="header">
             @php
                 $logoPath = public_path('images/logo-attiin.png');
-                $logoData = '';
-                if (file_exists($logoPath)) {
-                    $logoData = base64_encode(file_get_contents($logoPath));
+                if (!file_exists($logoPath)) {
+                    $logoPath = base_path('../public_html/images/logo-attiin.png');
                 }
+                if (!file_exists($logoPath) && isset($_SERVER['DOCUMENT_ROOT'])) {
+                    $logoPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/images/logo-attiin.png';
+                }
+                $logoData = file_exists($logoPath) ? base64_encode(file_get_contents($logoPath)) : '';
 
                 $batches = $batches->sortBy(function ($b) {
                     return $b->tanggal_kedaluwarsa
@@ -45,7 +48,7 @@
                                 
                                 <div class="qrcode-box">
                                     @php
-                                        $qrCodeData = base64_encode(QrCode::size(90)->generate($batch->batch_code));
+                                        $qrCodeData = base64_encode(\SimpleSoftwareIO\QrCode\Facades\QrCode::size(90)->generate($batch->batch_code));
                                     @endphp
                                     <img src="data:image/svg+xml;base64,{{ $qrCodeData }}" alt="QR Code">
                                 </div>

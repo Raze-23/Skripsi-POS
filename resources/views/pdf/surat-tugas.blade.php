@@ -12,10 +12,25 @@
 
     <div class="print-container">
 
+        @php
+            $logoPath = public_path('images/logo-attiin.png');
+            if (!file_exists($logoPath)) {
+                $logoPath = base_path('../public_html/images/logo-attiin.png');
+            }
+            if (!file_exists($logoPath) && isset($_SERVER['DOCUMENT_ROOT'])) {
+                $logoPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/images/logo-attiin.png';
+            }
+            $logoBase64 = file_exists($logoPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) : '';
+        @endphp
+
         <table class="letterhead">
             <tr>
                 <td>
-                    <img src="{{ asset('images/logo-attiin.png') }}" alt="CV. Herbal At-Tiin" class="brand-logo-img">
+                    @if($logoBase64)
+                        <img src="{{ $logoBase64 }}" alt="CV. Herbal At-Tiin" class="brand-logo-img">
+                    @else
+                        <div class="brand-logo-fallback">CV. HERBAL AT-TIIN</div>
+                    @endif
                     <div class="brand-contact">
                         Jl. Kutilang, Kerten, Kec. Laweyan, Kota Surakarta, Jawa Tengah<br>
                         Telp: +62-882-9847-1715
