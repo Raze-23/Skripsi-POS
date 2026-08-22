@@ -12,22 +12,10 @@
 
     <div class="print-container">
 
-        @php
-            $logoPath = public_path('images/logo-attiin.png');
-            $logoExists = file_exists($logoPath);
-            $logoBase64 = $logoExists
-                ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
-                : null;
-        @endphp
-
         <table class="letterhead">
             <tr>
                 <td>
-                    @if($logoBase64)
-                        <img src="{{ $logoBase64 }}" alt="CV. Herbal At-Tiin" class="brand-logo-img">
-                    @else
-                        <div class="brand-logo-fallback">CV. HERBAL AT-TIIN</div>
-                    @endif
+                    <img src="{{ asset('images/logo-attiin.png') }}" alt="CV. Herbal At-Tiin" class="brand-logo-img">
                     <div class="brand-contact">
                         Jl. Kutilang, Kerten, Kec. Laweyan, Kota Surakarta, Jawa Tengah<br>
                         Telp: +62-882-9847-1715
