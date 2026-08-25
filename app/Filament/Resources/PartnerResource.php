@@ -120,7 +120,7 @@ class PartnerResource extends Resource
                             ->where('stok_titipan', '>', 0)
                             ->whereHas('productBatch', function ($q) {
                                 $q->whereNotNull('tanggal_kedaluwarsa')
-                                  ->whereDate('tanggal_kedaluwarsa', '<=', now());
+                                  ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30));
                             })
                             ->count();
                     })
