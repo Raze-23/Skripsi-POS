@@ -21,3 +21,8 @@ Route::get('/admin/print-surat-tugas-otomatis', function () {
     $stocks = $stocks->groupBy('partner.nama_apotek');
     return view('pdf.surat-tugas-penarikan', compact('stocks'));
 })->name('print.surat.tugas.otomatis')->middleware(['auth']);
+
+Route::get('/setup-storage-link', function () {
+    Illuminate\Support\Facades\Artisan::call('storage:link');
+    return 'Storage link berhasil dibuat! Silakan hapus route ini setelah selesai.';
+})->middleware(['auth']);

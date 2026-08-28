@@ -79,6 +79,7 @@ class ProductResource extends Resource
                                         ->imageResizeMode('cover')
                                         ->imageResizeTargetWidth('800')
                                         ->imageResizeTargetHeight('800')
+                                        ->disk('public')
                                         ->directory('products')
                                         ->columnSpan(3),
                                 ]),
@@ -133,6 +134,7 @@ class ProductResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('foto')
                     ->circular()
+                    ->disk('public')
                     ->default(asset('images/notfound.png'))
                     ->extraImgAttributes(fn ($record) => [
                         'style' => $record->is_discontinued ? 'filter: grayscale(100%); opacity: 0.6;' : '',
