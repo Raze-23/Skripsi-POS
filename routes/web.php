@@ -12,7 +12,7 @@ Route::get('/admin/print-surat-tugas-otomatis', function () {
         ->where('stok_titipan', '>', 0)
         ->whereHas('productBatch', function ($query) {
             $query->whereNotNull('tanggal_kedaluwarsa')
-                  ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30)); 
+                  ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30));
         })
         ->get();
     if ($stocks->isEmpty()) {
@@ -21,8 +21,3 @@ Route::get('/admin/print-surat-tugas-otomatis', function () {
     $stocks = $stocks->groupBy('partner.nama_apotek');
     return view('pdf.surat-tugas-penarikan', compact('stocks'));
 })->name('print.surat.tugas.otomatis')->middleware(['auth']);
-
-Route::get('/setup-storage-link', function () {
-    Illuminate\Support\Facades\Artisan::call('storage:link');
-    return 'Storage link berhasil dibuat! Silakan hapus route ini setelah selesai.';
-})->middleware(['auth']);

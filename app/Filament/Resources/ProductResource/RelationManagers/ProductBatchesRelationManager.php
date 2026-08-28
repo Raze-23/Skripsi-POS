@@ -5,7 +5,6 @@ namespace App\Filament\Resources\ProductResource\RelationManagers;
 use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -38,26 +37,26 @@ class ProductBatchesRelationManager extends RelationManager
                         ->suffix('Pcs')
                         ->disabled(function (?Model $record) {
                             if (! $record) {
-                                return false; 
+                                return false;
                             }
-                            
+
                             $hasDisposals = $record->productDisposals()->exists();
                             $hasConsignments = $record->consignmentStocks()->exists();
-                            
+
                             return $hasDisposals || $hasConsignments;
                         })
                         ->helperText(function (?Model $record) {
                             if (! $record) {
                                 return 'Jumlah unit yang akan masuk ke stok toko untuk batch ini.';
                             }
-                            
+
                             $hasDisposals = $record->productDisposals()->exists();
                             $hasConsignments = $record->consignmentStocks()->exists();
-                            
+
                             if ($hasDisposals || $hasConsignments) {
                                 return '🔒 Terkunci';
                             }
-                            
+
                             return 'Jumlah unit yang akan masuk ke stok toko untuk batch ini.';
                         })
                         ->validationMessages([
@@ -83,7 +82,7 @@ class ProductBatchesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->heading('Daftar Batch Produk') 
+            ->heading('Daftar Batch Produk')
             ->modifyQueryUsing(fn (Builder $query) => $query->where('stok_toko', '>', 0))
             ->recordTitleAttribute('batch_code')
             ->defaultSort('created_at', 'desc')
@@ -135,6 +134,22 @@ class ProductBatchesRelationManager extends RelationManager
                 Tables\Actions\CreateAction::make()
                     ->label('Tambah Batch Baru')
                     ->icon('heroicon-o-plus-circle')
+                    ->icon(
+                        fn () => $this->getOwnerRecord()->is_discontinued
+                            ? 'heroicon-o-lock-closed'
+                            : 'heroicon-o-plus-circle'
+                    )
+                    ->color(
+                        fn () => $this->getOwnerRecord()->is_discontinued
+                            ? 'gray'
+                            : 'primary'
+                    )
+                    ->disabled(fn () => $this->getOwnerRecord()->is_discontinued)
+                    ->tooltip(
+                        fn () => $this->getOwnerRecord()->is_discontinued
+                            ? 'Produk ini sudah berhenti produksi, tidak dapat menambah batch baru.'
+                            : null
+                    )
                     ->successNotification(
                         Notification::make()
                             ->success()
@@ -167,7 +182,7 @@ class ProductBatchesRelationManager extends RelationManager
                                 ->title('Gagal Menghapus')
                                 ->body('Batch ini tidak dapat dihapus karena sudah memiliki riwayat transaksi, konsinyasi, atau pembuangan.')
                                 ->send();
-                            
+
                             $action->halt();
                         }
                     })
