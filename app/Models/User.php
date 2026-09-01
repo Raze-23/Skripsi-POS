@@ -23,7 +23,8 @@ class User extends Authenticatable implements HasAvatar, FilamentUser
         'name',
         'email',
         'password',
-        'role'
+        'role',
+        'partner_id',
     ];
 
 
@@ -35,6 +36,16 @@ class User extends Authenticatable implements HasAvatar, FilamentUser
     public function transactions()
     {
         return $this->hasMany(Transaction::class, 'kasir_id');
+    }
+
+    public function partner()
+    {
+        return $this->belongsTo(Partner::class);
+    }
+
+    public function productRequests()
+    {
+        return $this->hasMany(ProductRequest::class);
     }
 
     public function getFilamentAvatarUrl(): ?string

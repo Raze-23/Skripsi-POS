@@ -18,7 +18,7 @@ class Dashboard extends \Filament\Pages\Dashboard
 
     public static function canAccess(): bool
     {
-        return Auth::user()?->role === 'admin';
+        return in_array(Auth::user()?->role, ['admin', 'owner']);
     }
 
     public function filtersForm(Form $form): Form

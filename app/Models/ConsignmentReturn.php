@@ -14,7 +14,14 @@ class ConsignmentReturn extends Model
         'qty_layak',
         'qty_rusak',
         'omzet_terbentuk',
+        'status',
     ];
+
+    public function consignmentStock()
+    {
+        return $this->hasOne(ConsignmentStock::class, 'product_batch_id', 'product_batch_id')
+                    ->where('partner_id', $this->partner_id);
+    }
 
     public function partner()
     {
@@ -29,5 +36,10 @@ class ConsignmentReturn extends Model
     public function sales() 
     {
         return $this->belongsTo(Sales::class, 'sales_id');
+    }
+
+    public function productDisposals()
+    {
+        return $this->hasMany(ProductDisposal::class, 'consignment_return_id');
     }
 }

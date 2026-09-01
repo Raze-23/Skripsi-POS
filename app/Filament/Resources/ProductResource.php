@@ -22,6 +22,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class ProductResource extends Resource
 {
@@ -272,5 +274,25 @@ class ProductResource extends Resource
     public static function getNavigationBadgeColor(): ?string
     {
         return 'danger';
+    }
+
+    public static function canAccess(): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canCreate(): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return Auth::user()?->role === 'admin';
     }
 }

@@ -17,6 +17,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ConsignmentStockRelationManager extends RelationManager
@@ -157,9 +158,31 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->icon('heroicon-o-archive-box-arrow-down')
                     ->color('danger')
                     ->modalHeading(fn (Model $record) => "Penarikan: {$record->productBatch->product->nama} ({$record->productBatch->batch_code})")
-                    ->modalDescription(fn (Model $record) => "Total rincian di bawah wajib berjumlah tepat {$record->stok_titipan} pcs (Sesuai sisa titipan).")
-                    ->modalSubmitActionLabel('Selesaikan Penarikan')
-                    ->modalCancelActionLabel('Tutup')
+                    ->modalDescription(fn (Model $record) => "Mengajukan penarikan {$record->stok_titipan} pcs. Rincian (terjual/layak/rusak) akan diisi oleh pihak Mitra.")
+                    ->modalSubmitActionLabel('Ajukan Penarikan')
+                    ->modalCancelActionLabel('Batal')
+                    ->visible(function () {
+                        return Auth::user()?->role !== 'mitra';
+                    })
+                    ->mountUsing(function (Model $record, ?Forms\Form $form, Tables\Actions\Action $action) {
+                        $sudahDiajukan = ConsignmentReturn::where('product_batch_id', $record->product_batch_id)
+                            ->where('partner_id', $this->getOwnerRecord()->id)
+                            ->where('status', 'menunggu_konfirmasi')
+                            ->exists();
+
+                        if ($sudahDiajukan) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Sudah Pernah Dikonfirmasi')
+                                ->body("Penarikan {$record->productBatch->product->nama} (Batch: {$record->productBatch->batch_code}) sudah diajukan sebelumnya dan masih menunggu konfirmasi dari Mitra.")
+                                ->icon('heroicon-o-exclamation-triangle')
+                                ->send();
+
+                            $action->halt();
+                        }
+
+                        $form?->fill();
+                    })
                     ->form([
                         Forms\Components\Select::make('sales_id')
                             ->label('Nama Sales Penarik')
@@ -172,109 +195,51 @@ class ConsignmentStockRelationManager extends RelationManager
                             ->native(false)
                             ->validationMessages([
                                 'required' => 'Identitas Sales wajib dipilih.',
-                            ])
-                            ->columnSpanFull(),
-
-                        Forms\Components\Grid::make(3)
-                            ->schema([
-                                Forms\Components\TextInput::make('terjual')
-                                    ->label('Terjual (Laku)')
-                                    ->prefixIcon('heroicon-o-currency-dollar')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->rule('required')
-                                    ->markAsRequired()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->validationMessages([
-                                        'required' => 'Wajib diisi.',
-                                        'min' => 'Minimal 0.',
-                                    ])
-                                    ->helperText('Uang masuk.'),
-
-                                Forms\Components\TextInput::make('qty_layak')
-                                    ->label('Sisa Layak Jual')
-                                    ->prefixIcon('heroicon-o-arrow-path')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->rule('required')
-                                    ->markAsRequired()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->validationMessages([
-                                        'required' => 'Wajib diisi.',
-                                        'min' => 'Minimal 0.',
-                                    ])
-                                    ->helperText('Kembali ke rak toko.'),
-
-                                Forms\Components\TextInput::make('qty_rusak')
-                                    ->label('Barang Rusak')
-                                    ->prefixIcon('heroicon-o-archive-box-x-mark')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->rule('required')
-                                    ->markAsRequired()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->validationMessages([
-                                        'required' => 'Wajib diisi.',
-                                        'min' => 'Minimal 0.',
-                                    ])
-                                    ->helperText('Dibuang & catat rugi.'),
                             ]),
                     ])
-                    ->action(function (Model $record, array $data, Tables\Actions\Action $action) {
-                        $terjual = (int) ($data['terjual'] ?? 0);
-                        $layak   = (int) ($data['qty_layak'] ?? 0);
-                        $rusak   = (int) ($data['qty_rusak'] ?? 0);
-                        $salesId = $data['sales_id'];
-                        
-                        $total = $terjual + $layak + $rusak;
+                    ->action(function (Model $record, array $data) {
+                        $berhasil = false;
+                        DB::transaction(function () use ($record, $data, &$berhasil) {
+                            $sudahDiajukan = ConsignmentReturn::where('product_batch_id', $record->product_batch_id)
+                                ->where('partner_id', $this->getOwnerRecord()->id)
+                                ->where('status', 'menunggu_konfirmasi')
+                                ->lockForUpdate()
+                                ->exists();
 
-                        if ($total !== $record->stok_titipan) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Jumlah Tidak Pas!')
-                                ->body("Total rincian ({$total} pcs) harus persis dengan sisa stok ({$record->stok_titipan} pcs).")
-                                ->send();
-
-                            $action->halt(); 
-                        }
-
-                        DB::transaction(function () use ($record, $terjual, $layak, $rusak, $salesId) {
-                            if ($layak > 0) {
-                                $record->productBatch->increment('stok_toko', $layak);
+                            if ($sudahDiajukan) {
+                                return;
                             }
 
-                            $return = ConsignmentReturn::create([
-                                'partner_id' => $this->getOwnerRecord()->id,
-                                'product_batch_id' => $record->product_batch_id,
-                                'sales_id' => $salesId,
-                                'terjual'    => $terjual,
-                                'qty_layak'  => $layak,
-                                'qty_rusak'  => $rusak,
-                                'omzet_terbentuk' => 0,
+                            ConsignmentReturn::create([
+                                'partner_id'       => $this->getOwnerRecord()->id,
+                                'product_batch_id'  => $record->product_batch_id,
+                                'sales_id'          => $data['sales_id'],
+                                'terjual'           => 0,
+                                'qty_layak'         => 0,
+                                'qty_rusak'         => 0,
+                                'omzet_terbentuk'   => 0,
+                                'status'            => 'menunggu_konfirmasi',
                             ]);
 
-
-                            if ($rusak > 0) {
-                                ProductDisposal::create([
-                                    'product_batch_id'      => $record->product_batch_id,
-                                    'jumlah'                => $rusak,
-                                    'alasan'                => 'Barang Rusak',
-                                    'sumber'                => 'Apotek',
-                                    'consignment_return_id' => $return->id,
-                                ]);
-                            }
-
-                            $record->delete();
+                            $berhasil = true;
                         });
+
+                        if (! $berhasil) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Sudah Pernah Dikonfirmasi')
+                                ->body("Penarikan untuk {$record->productBatch->product->nama} sudah diajukan sebelumnya dan masih menunggu konfirmasi dari Mitra.")
+                                ->icon('heroicon-o-exclamation-triangle')
+                                ->send();
+
+                            return;
+                        }
 
                         Notification::make()
                             ->success()
-                            ->title('Barang Berhasil Ditarik!')
-                            ->body("Data penarikan {$record->productBatch->product->nama} berhasil dicatat ke sistem.")
-                            ->icon('heroicon-o-clipboard-document-check')
+                            ->title('Penarikan Diajukan!')
+                            ->body("Menunggu konfirmasi rincian dari Mitra untuk {$record->productBatch->product->nama} ({$record->stok_titipan} pcs).")
+                            ->icon('heroicon-o-clock')
                             ->send();
                     }),
             ]);

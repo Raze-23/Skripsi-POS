@@ -339,10 +339,10 @@
         Livewire.on('cart-updated', ({ message }) => {
             showToast(message, 'success');
         });
-
+        
         Livewire.on('stock-warning', (data) => {
-            let errorMsg = data[0]?.name ? data[0].name : 'Stok Habis';
-            showToast('Gagal: ' + errorMsg, 'error');
+            let pesan = data[0]?.name ? data[0].name : 'Stok produk habis';
+            showToast(pesan, 'warn');
         });
     });
 

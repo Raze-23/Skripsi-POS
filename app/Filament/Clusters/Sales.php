@@ -17,7 +17,6 @@ class Sales extends Cluster
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
-        return $user && in_array($user->role, ['kasir']);
+        return in_array(Auth::user()?->role, ['admin', 'kasir']);
     }
 }

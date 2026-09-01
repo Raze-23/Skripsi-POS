@@ -17,4 +17,9 @@ class Product extends Model
     {
         return $this->hasManyThrough(ProductDisposal::class, ProductBatch::class);
     }
+
+    public function productRequests()
+    {
+        return $this->hasMany(ProductRequest::class);
+    }
 }

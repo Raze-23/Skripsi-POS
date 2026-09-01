@@ -59,6 +59,13 @@ class TransactionResource extends Resource
                     ->dateTime('d M Y, H:i')
                     ->sortable(),
 
+                TextColumn::make('kasir.name')
+                    ->label('Dilayani Oleh')
+                    ->icon('heroicon-o-user')
+                    ->sortable()
+                    ->searchable()
+                    ->placeholder('-'),
+
                 TextColumn::make('total_harga')
                     ->label('Total Tagihan')
                     ->money('IDR', locale: 'id')
@@ -163,7 +170,6 @@ class TransactionResource extends Resource
                         ->modalHeading('Batalkan Transaksi?')
                         ->modalDescription('Apakah Anda yakin ingin membatalkan transaksi ini? Stok produk akan dikembalikan otomatis ke toko.')
                         ->modalSubmitActionLabel('Ya, Batalkan')
-                        ->authorize('cancel')
                         ->visible(fn (?Transaction $record) => $record !== null && $record->status !== 'Batal')
                         ->action(function (Transaction $record) {
                             DB::transaction(function () use ($record) {
@@ -206,6 +212,10 @@ class TransactionResource extends Resource
                         TextEntry::make('created_at')
                             ->label('Waktu Transaksi')
                             ->dateTime('d M Y, H:i:s'),
+                        TextEntry::make('kasir.name')
+                            ->label('Dilayani Oleh')
+                            ->icon('heroicon-o-user')
+                            ->placeholder('-'),
                         TextEntry::make('status')
                             ->badge()
                             ->color(fn (string $state): string => match ($state) {
@@ -272,7 +282,7 @@ class TransactionResource extends Resource
 
     public static function canAccess(): bool
     {
-        return Auth::user()?->role === 'kasir';
+        return in_array(Auth::user()?->role, ['admin', 'kasir']);
     }
 
     public static function canCreate(): bool

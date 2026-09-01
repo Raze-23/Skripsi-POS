@@ -14,8 +14,11 @@ class LoginResponse implements LoginResponseContract
         $user = Auth::user();
 
         if ($user && $user->role === 'kasir') {
-           
-            return redirect()->to('/sales/cashier'); 
+            return redirect()->to('/sales/cashier');
+        }
+
+        if ($user && $user->role === 'mitra') {
+            return redirect()->to('/consignment-returns');
         }
 
         return redirect()->intended(filament()->getUrl());

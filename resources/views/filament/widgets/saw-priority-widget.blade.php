@@ -5,20 +5,20 @@
             'icon'  => 'heroicon-o-fire',
             'class' => 'text-danger-500',
         ],
-        'stok' => [
-            'label' => 'Stok menipis',
-            'icon'  => 'heroicon-o-archive-box',
-            'class' => 'text-warning-500',
-        ],
         'kedaluwarsa' => [
             'label' => 'Mendekati kedaluwarsa',
             'icon'  => 'heroicon-o-clock',
             'class' => 'text-warning-500',
         ],
-        'produksi' => [
-            'label' => 'Cepat diproduksi',
-            'icon'  => 'heroicon-o-bolt',
+        'req_mitra' => [
+            'label' => 'Request restok apotek',
+            'icon'  => 'heroicon-o-arrow-path',
             'class' => 'text-primary-500',
+        ],
+        'req_owner' => [
+            'label' => 'Request produksi owner',
+            'icon'  => 'heroicon-o-clipboard-document-check',
+            'class' => 'text-info-500',
         ],
     ];
 @endphp
@@ -38,7 +38,7 @@
         <div class="divide-y divide-gray-100 dark:divide-gray-800">
             @forelse ($this->getRankedProducts() as $index => $item)
                 @php
-                    $faktor = $faktorMap[$item['faktor_utama']] ?? $faktorMap['stok'];
+                    $faktor = $faktorMap[$item['faktor_utama']] ?? $faktorMap['penjualan'];
 
                     if ($index < 2) {
                         $badgeLabel = 'Sangat Mendesak';

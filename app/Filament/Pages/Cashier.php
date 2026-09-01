@@ -228,11 +228,13 @@ class Cashier extends Page
             return false;
         }
 
+        $isClamped = false;
         if ($totalRequestedQty > $totalStokToko) {
             $productName = $batches->first()?->product?->nama ?? 'Produk';
             $this->dispatch('play-error-beep');
             $this->dispatch('stock-warning', [['name' => $productName . ' (Maks: ' . $totalStokToko . ')']]);
             $totalRequestedQty = $totalStokToko;
+            $isClamped = true;
         }
 
         foreach ($this->cart as $key => $item) {
@@ -263,7 +265,7 @@ class Cashier extends Page
             $remainingQty -= $takeQty;
         }
 
-        return true;
+        return ! $isClamped;
     }
 
     public function removeItem($batchId)
@@ -374,6 +376,6 @@ class Cashier extends Page
 
     public static function canAccess(): bool
     {
-        return Auth::user()?->role === 'kasir';
+        return in_array(Auth::user()?->role, ['admin', 'kasir']);
     }
 }

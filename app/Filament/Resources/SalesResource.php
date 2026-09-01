@@ -11,6 +11,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class SalesResource extends Resource
 {
@@ -148,5 +150,25 @@ class SalesResource extends Resource
             'create' => Pages\CreateSales::route('/create'),
             'edit' => Pages\EditSales::route('/{record}/edit'),
         ];
+    }
+
+    public static function canAccess(): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canCreate(): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return Auth::user()?->role === 'admin';
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return Auth::user()?->role === 'admin';
     }
 }
