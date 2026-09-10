@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class ConsignmentStock extends Model
 {
     protected $guarded = ['id'];
-    protected $casts = ['tanggal_titip' => 'date'];
 
     public function partner()
     {
@@ -17,5 +16,10 @@ class ConsignmentStock extends Model
     public function productBatch()
     {
         return $this->belongsTo(ProductBatch::class);
+    }
+
+    public function sales()
+    {
+        return $this->belongsTo(Sales::class, 'sales_id');
     }
 }

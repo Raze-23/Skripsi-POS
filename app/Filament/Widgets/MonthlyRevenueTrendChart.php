@@ -20,15 +20,12 @@ class MonthlyRevenueTrendChart extends ChartWidget
     protected function getData(): array
     {
         $year = (int) ($this->filters['year'] ?? now()->year);
-        $kasirPerMonth = DB::table('transaction_details')
-            ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
-            ->join('product_batches', 'product_batches.id', '=', 'transaction_details.product_batch_id')
-            ->join('products', 'products.id', '=', 'product_batches.product_id')
+        $kasirPerMonth = DB::table('transactions')
             ->where('transactions.status', 'Selesai')
             ->whereYear('transactions.created_at', $year)
             ->select(
                 DB::raw('MONTH(transactions.created_at) as bulan'),
-                DB::raw('SUM(transaction_details.qty * products.harga_jual) as total')
+                DB::raw('SUM(transactions.total_harga) as total')
             )
             ->groupBy('bulan')
             ->pluck('total', 'bulan');
@@ -37,9 +34,10 @@ class MonthlyRevenueTrendChart extends ChartWidget
             ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
             ->join('products', 'products.id', '=', 'product_batches.product_id')
             ->whereYear('consignment_returns.created_at', $year)
+            ->where('consignment_returns.status', 'selesai')
             ->select(
                 DB::raw('MONTH(consignment_returns.created_at) as bulan'),
-                DB::raw('SUM(consignment_returns.terjual * products.harga_jual) as total')
+                DB::raw('SUM(CASE WHEN consignment_returns.omzet_terbentuk > 0 THEN consignment_returns.omzet_terbentuk ELSE consignment_returns.terjual * products.harga_jual END) as total')
             )
             ->groupBy('bulan')
             ->pluck('total', 'bulan');

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
+use App\Models\User;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
@@ -16,8 +17,19 @@ class EditUser extends EditRecord
         return [
             Actions\DeleteAction::make()
                 ->label('Hapus Pengguna')
-                ->icon('heroicon-o-trash') // Penambahan ikon
+                ->icon('heroicon-o-trash')
                 ->color('danger')
+                ->before(function (User $record, Actions\DeleteAction $action) {
+                    $blockers = UserResource::getDeleteBlockers($record);
+
+                    if (empty($blockers)) {
+                        return;
+                    }
+
+                    UserResource::sendDeleteBlockedNotification($record, $blockers);
+
+                    $action->halt();
+                })
                 ->successNotification(
                     Notification::make()
                         ->success()

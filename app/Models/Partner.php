@@ -21,4 +21,19 @@ class Partner extends Model
     {
         return $this->hasMany(ConsignmentReturn::class);
     }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function consignmentDeliveries()
+    {
+        return $this->hasMany(ConsignmentDelivery::class);
+    }
+
+    public function productRequests()
+    {
+        return $this->hasMany(ProductRequest::class);
+    }
 }

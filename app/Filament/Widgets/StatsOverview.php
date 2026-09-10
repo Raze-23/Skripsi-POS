@@ -21,30 +21,28 @@ class StatsOverview extends BaseWidget
 
         $formatRupiah = fn (int $value) => 'Rp ' . number_format($value, 0, ',', '.');
 
-        $pendapatanKasir = (int) DB::table('transaction_details')
-            ->join('transactions', 'transactions.id', '=', 'transaction_details.transaction_id')
-            ->join('product_batches', 'product_batches.id', '=', 'transaction_details.product_batch_id')
-            ->join('products', 'products.id', '=', 'product_batches.product_id')
+        $pendapatanKasir = (int) DB::table('transactions')
             ->where('transactions.status', 'Selesai')
             ->whereYear('transactions.created_at', $year)
-            ->sum(DB::raw('transaction_details.qty * products.harga_jual'));
+            ->sum('transactions.total_harga');
 
         $pendapatanApotek = (int) DB::table('consignment_returns')
             ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
             ->join('products', 'products.id', '=', 'product_batches.product_id')
             ->whereYear('consignment_returns.created_at', $year)
-            ->sum(DB::raw('consignment_returns.terjual * products.harga_jual'));
+            ->where('consignment_returns.status', 'selesai')
+            ->sum(DB::raw('CASE WHEN consignment_returns.omzet_terbentuk > 0 THEN consignment_returns.omzet_terbentuk ELSE consignment_returns.terjual * products.harga_jual END'));
 
         $totalPendapatan = $pendapatanKasir + $pendapatanApotek;
 
         $totalPengeluaran = (int) DB::table('product_batches as pb')
             ->join('products as p', 'p.id', '=', 'pb.product_id')
             ->leftJoin(
-                DB::raw('(SELECT product_batch_id, COALESCE(SUM(qty), 0) as sold_kasir FROM transaction_details GROUP BY product_batch_id) as td'),
+                DB::raw("(SELECT td.product_batch_id, COALESCE(SUM(td.qty), 0) as sold_kasir FROM transaction_details td JOIN transactions t ON t.id = td.transaction_id WHERE t.status = 'Selesai' GROUP BY td.product_batch_id) as td"),
                 'td.product_batch_id', '=', 'pb.id'
             )
             ->leftJoin(
-                DB::raw('(SELECT product_batch_id, COALESCE(SUM(terjual), 0) as sold_apotek, COALESCE(SUM(qty_rusak), 0) as rusak FROM consignment_returns GROUP BY product_batch_id) as cr'),
+                DB::raw("(SELECT product_batch_id, COALESCE(SUM(terjual), 0) as sold_apotek FROM consignment_returns WHERE status = 'selesai' GROUP BY product_batch_id) as cr"),
                 'cr.product_batch_id', '=', 'pb.id'
             )
             ->leftJoin(
@@ -57,7 +55,7 @@ class StatsOverview extends BaseWidget
             )
             ->whereYear('pb.created_at', $year)
             ->sum(DB::raw(
-                '(pb.stok_toko + COALESCE(td.sold_kasir, 0) + COALESCE(cr.sold_apotek, 0) + COALESCE(cr.rusak, 0) + COALESCE(cs.titipan, 0) + COALESCE(pd.disposed, 0)) * p.harga_beli'
+                '(pb.stok_toko + COALESCE(td.sold_kasir, 0) + COALESCE(cr.sold_apotek, 0) + COALESCE(cs.titipan, 0) + COALESCE(pd.disposed, 0)) * p.harga_beli'
             ));
 
         $labaBersih = $totalPendapatan - $totalPengeluaran;

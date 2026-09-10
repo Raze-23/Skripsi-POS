@@ -23,7 +23,11 @@ class ProductRequestResource extends Resource
     protected static ?string $model = ProductRequest::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
+
     protected static ?string $pluralLabel = 'Daftar Request Produk';
+
+    protected static ?string $modelLabel = 'Request Produk';
+
     protected static ?int $navigationSort = 5;
 
     public static function getNavigationLabel(): string

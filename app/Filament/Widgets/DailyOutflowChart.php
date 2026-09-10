@@ -63,6 +63,7 @@ class DailyOutflowChart extends ChartWidget
         $apotekDaily = DB::table('consignment_returns')
             ->whereYear('created_at', $year)
             ->whereMonth('created_at', $month)
+            ->where('status', 'selesai')
             ->select(
                 DB::raw('DAY(created_at) as hari'),
                 DB::raw('SUM(terjual) as total_qty')

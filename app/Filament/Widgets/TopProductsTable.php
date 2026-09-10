@@ -30,6 +30,7 @@ class TopProductsTable extends Widget
         $apotekSales = DB::table('consignment_returns')
             ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
             ->whereYear('consignment_returns.created_at', $year)
+            ->where('consignment_returns.status', 'selesai')
             ->select('product_batches.product_id', DB::raw('SUM(consignment_returns.terjual) as apotek_qty'))
             ->groupBy('product_batches.product_id')
             ->pluck('apotek_qty', 'product_id');

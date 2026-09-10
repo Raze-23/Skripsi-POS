@@ -52,4 +52,9 @@ class ProductBatch extends Model
     {
         return $this->hasMany(TransactionDetail::class);
     }
+
+    public function consignmentDeliveries()
+    {
+        return $this->hasMany(ConsignmentDelivery::class);
+    }
 }

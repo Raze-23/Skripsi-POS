@@ -3,7 +3,9 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\ConsignmentReturn;
 use App\Models\Partner;
+use App\Models\ProductRequest;
 use App\Models\User;
 use Closure;
 use Filament\Forms;
@@ -13,6 +15,7 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Filament\Notifications\Notification;
@@ -28,6 +31,53 @@ class UserResource extends Resource
     public static function canAccess(): bool
     {
         return Auth::user()?->role === 'admin';
+    }
+
+    public static function getDeleteBlockers(User $user): array
+    {
+        $blockers = [];
+
+        if ($user->transactions()->exists()) {
+            $blockers[] = 'memiliki riwayat transaksi POS';
+        }
+
+        $hasProductRequests = $user->productRequests()->exists();
+
+        if ($user->role === 'mitra' && filled($user->partner_id)) {
+            $hasProductRequests = $hasProductRequests || ProductRequest::query()
+                ->where('partner_id', $user->partner_id)
+                ->where('tipe_request', 'restok_apotek')
+                ->exists();
+
+            if (
+                ConsignmentReturn::query()
+                    ->where('partner_id', $user->partner_id)
+                    ->where('status', 'selesai')
+                    ->exists()
+            ) {
+                $blockers[] = 'memiliki riwayat konfirmasi penarikan produk';
+            }
+        }
+
+        if ($hasProductRequests) {
+            $blockers[] = match ($user->role) {
+                'owner' => 'memiliki riwayat request produksi produk',
+                'mitra' => 'memiliki riwayat request produk',
+                default => 'memiliki riwayat request produk',
+            };
+        }
+
+        return $blockers;
+    }
+
+    public static function sendDeleteBlockedNotification(User $user, array $blockers, string $title = 'Gagal Menghapus Akun'): void
+    {
+        Notification::make()
+            ->danger()
+            ->title($title)
+            ->body("Akun {$user->name} tidak bisa dihapus karena " . implode(', ', $blockers) . '.')
+            ->icon('heroicon-o-exclamation-triangle')
+            ->send();
     }
 
     public static function form(Form $form): Form
@@ -195,6 +245,17 @@ class UserResource extends Resource
                     ->label('Hapus')
                     ->icon('heroicon-o-trash') 
                     ->color('danger')
+                    ->before(function (User $record, Tables\Actions\DeleteAction $action) {
+                        $blockers = static::getDeleteBlockers($record);
+
+                        if (empty($blockers)) {
+                            return;
+                        }
+
+                        static::sendDeleteBlockedNotification($record, $blockers);
+
+                        $action->halt();
+                    })
                     ->successNotification(
                         Notification::make()
                             ->success()
@@ -205,6 +266,24 @@ class UserResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (Collection $records, Tables\Actions\DeleteBulkAction $action) {
+                            $blockedUsers = $records->filter(fn (User $record): bool => ! empty(static::getDeleteBlockers($record)));
+
+                            if ($blockedUsers->isEmpty()) {
+                                return;
+                            }
+
+                            $firstBlockedUser = $blockedUsers->first();
+                            $blockers = static::getDeleteBlockers($firstBlockedUser);
+
+                            static::sendDeleteBlockedNotification(
+                                $firstBlockedUser,
+                                $blockers,
+                                $blockedUsers->count() > 1 ? 'Gagal Menghapus Massal' : 'Gagal Menghapus Akun'
+                            );
+
+                            $action->halt();
+                        })
                         ->successNotification(
                             Notification::make()
                                 ->success()

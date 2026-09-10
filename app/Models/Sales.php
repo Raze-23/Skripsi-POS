@@ -17,4 +17,9 @@ class Sales extends Model
     {
         return $this->hasMany(ConsignmentReturn::class);
     }
+
+    public function consignmentStocks()
+    {
+        return $this->hasMany(ConsignmentStock::class);
+    }
 }
