@@ -81,6 +81,7 @@ class ConsignmentStockRelationManager extends RelationManager
                                 ->label('Pilih Batch Produk')
                                 ->prefixIcon('heroicon-o-tag')
                                 ->options(fn () => ProductBatch::where('stok_toko', '>', 0)
+                                    ->whereDate('tanggal_kedaluwarsa', '>=', now())
                                     ->with('product')
                                     ->get()
                                     ->mapWithKeys(fn ($b) => [$b->id => $b->product->nama . ' — ' . $b->batch_code . ' (Stok: ' . $b->stok_toko . ')'])
