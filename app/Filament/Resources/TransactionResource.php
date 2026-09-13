@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Clusters\Sales;
+use App\Filament\Resources\TransactionResource\Actions\ExportTransactionCsvAction;
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Models\Product;
 use App\Models\Transaction;
@@ -195,7 +196,7 @@ class TransactionResource extends Resource
             ->bulkActions([
             ])
             ->headerActions([
-                \App\Filament\Resources\TransactionResource\Actions\ExportTransactionCsvAction::make(),
+                ExportTransactionCsvAction::make(),
             ]);
     }
 
