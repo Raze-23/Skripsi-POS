@@ -3,9 +3,11 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Product;
+use App\Services\SawPriorityMovementTracker;
 use Carbon\Carbon;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class SawPriorityWidget extends Widget
@@ -13,19 +15,27 @@ class SawPriorityWidget extends Widget
     use InteractsWithPageFilters;
 
     protected static string $view = 'filament.widgets.saw-priority-widget';
-    protected int|string|array $columnSpan = 1;
+
+    protected int|string|array $columnSpan = 'full';
+
     protected static ?int $sort = 4;
 
     public const BOBOT = [
-        'penjualan'   => 0.35, // C1 – Benefit
+        'penjualan' => 0.35, // C1 – Benefit
         'kedaluwarsa' => 0.30, // C2 – Cost
-        'stok'        => 0.25, // C3 – Cost
-        'req_mitra'   => 0.05, // C4 – Benefit
-        'req_owner'   => 0.05, // C5 – Benefit
+        'stok' => 0.25, // C3 – Cost
+        'req_mitra' => 0.05, // C4 – Benefit
+        'req_owner' => 0.05, // C5 – Benefit
     ];
 
     private const NO_BATCH_EXPIRY_DAYS = 999;
+
     private const MIN_VALID_YEAR = 2000;
+
+    public static function canView(): bool
+    {
+        return in_array(Auth::user()?->role, ['admin', 'owner']);
+    }
 
     public function getRankedProducts(): array
     {
@@ -69,7 +79,7 @@ class SawPriorityWidget extends Widget
             ->leftJoin('consignment_stocks', 'product_batches.id', '=', 'consignment_stocks.product_batch_id')
             ->where(function ($query) {
                 $query->where('product_batches.stok_toko', '>', 0)
-                      ->orWhere('consignment_stocks.stok_titipan', '>', 0);
+                    ->orWhere('consignment_stocks.stok_titipan', '>', 0);
             })
             ->select(
                 'product_batches.product_id',
@@ -129,15 +139,15 @@ class SawPriorityWidget extends Widget
             $c5 = (float) ($reqOwner[$id] ?? 0);
 
             $rawData[] = [
-                'id'         => $id,
-                'nama'       => $product->nama,
-                'c1'         => $c1,
-                'c2'         => $c2,
-                'c3'         => $c3,
-                'c4'         => $c4,
-                'c5'         => $c5,
+                'id' => $id,
+                'nama' => $product->nama,
+                'c1' => $c1,
+                'c2' => $c2,
+                'c3' => $c3,
+                'c4' => $c4,
+                'c5' => $c5,
                 'expiry_raw' => $nearestExpiry[$id] ?? null,
-                'stok_raw'   => (float) ($totalStok[$id] ?? 0),
+                'stok_raw' => (float) ($totalStok[$id] ?? 0),
             ];
         }
 
@@ -172,16 +182,16 @@ class SawPriorityWidget extends Widget
             $normC5 = $row['c5'] / $maxC5;  // Benefit: raw / max
 
             $kontribusi = [
-                'penjualan'   => self::BOBOT['penjualan']   * $normC1,
+                'penjualan' => self::BOBOT['penjualan'] * $normC1,
                 'kedaluwarsa' => self::BOBOT['kedaluwarsa'] * $normC2,
-                'stok'        => self::BOBOT['stok']        * $normC3,
-                'req_mitra'   => self::BOBOT['req_mitra']   * $normC4,
-                'req_owner'   => self::BOBOT['req_owner']   * $normC5,
+                'stok' => self::BOBOT['stok'] * $normC3,
+                'req_mitra' => self::BOBOT['req_mitra'] * $normC4,
+                'req_owner' => self::BOBOT['req_owner'] * $normC5,
             ];
 
             $score = array_sum($kontribusi);
 
-            $row['score']       = round($score, 4);
+            $row['score'] = round($score, 4);
             $row['skor_persen'] = (int) round($score * 100);
 
             arsort($kontribusi);
@@ -195,7 +205,7 @@ class SawPriorityWidget extends Widget
             $row['c4_display'] = (int) $row['c4'];
             $row['c5_display'] = (int) $row['c5'];
 
-            $row['tahun_dianalisis']            = $year;
+            $row['tahun_dianalisis'] = $year;
             $row['ada_data_penjualan_tahun_ini'] = $adaDataPenjualanTahunIni;
 
             $rankedData[] = $row;
@@ -203,6 +213,8 @@ class SawPriorityWidget extends Widget
 
         // ── Step 5: Sort descending by final score ───────────────────────────────
         usort($rankedData, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        $rankedData = app(SawPriorityMovementTracker::class)->track($rankedData, $year);
 
         return array_slice($rankedData, 0, 6);
     }

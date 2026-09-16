@@ -3,16 +3,28 @@
 namespace App\Filament\Pages;
 
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\TextInput;
 use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Pages\Auth\Login as BaseAuthLogin;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class Login extends BaseAuthLogin
 {
+    public function getTitle(): string|Htmlable
+    {
+        return 'Masuk Panel Admin';
+    }
+
+    public function getHeading(): string|Htmlable
+    {
+        return 'Portal Admin';
+    }
+
     public function authenticate(): ?LoginResponse
     {
         try {
@@ -66,7 +78,9 @@ class Login extends BaseAuthLogin
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('email')
-            ->label('Email')
+            ->label('Alamat Email')
+            ->prefixIcon('heroicon-o-at-symbol')
+            ->placeholder('Masukkan alamat email')
             ->email()
             ->required()
             ->autocomplete()
@@ -82,6 +96,8 @@ class Login extends BaseAuthLogin
     {
         return TextInput::make('password')
             ->label('Password')
+            ->prefixIcon('heroicon-o-key')
+            ->placeholder('Masukkan password')
             ->password()
             ->revealable(filament()->arePasswordsRevealable())
             ->autocomplete('current-password')
@@ -90,5 +106,12 @@ class Login extends BaseAuthLogin
             ->validationMessages([
                 'required' => 'Password wajib diisi.',
             ]);
+    }
+
+    protected function getAuthenticateFormAction(): Action
+    {
+        return parent::getAuthenticateFormAction()
+            ->label('Login')
+            ->icon('heroicon-o-arrow-right-end-on-rectangle');
     }
 }

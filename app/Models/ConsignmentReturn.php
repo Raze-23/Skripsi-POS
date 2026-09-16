@@ -13,14 +13,22 @@ class ConsignmentReturn extends Model
         'terjual',
         'qty_layak',
         'qty_rusak',
+        'diskon_persen',
+        'harga_satuan',
         'omzet_terbentuk',
         'status',
+    ];
+
+    protected $casts = [
+        'diskon_persen' => 'decimal:2',
+        'harga_satuan' => 'integer',
+        'omzet_terbentuk' => 'integer',
     ];
 
     public function consignmentStock()
     {
         return $this->hasOne(ConsignmentStock::class, 'product_batch_id', 'product_batch_id')
-                    ->where('partner_id', $this->partner_id);
+            ->where('partner_id', $this->partner_id);
     }
 
     public function partner()
@@ -33,7 +41,7 @@ class ConsignmentReturn extends Model
         return $this->belongsTo(ProductBatch::class);
     }
 
-    public function sales() 
+    public function sales()
     {
         return $this->belongsTo(Sales::class, 'sales_id');
     }
@@ -41,5 +49,18 @@ class ConsignmentReturn extends Model
     public function productDisposals()
     {
         return $this->hasMany(ProductDisposal::class, 'consignment_return_id');
+    }
+
+    public function resolvedUnitPrice(?ConsignmentStock $stock = null): int
+    {
+        return (int) ($this->harga_satuan
+            ?? $stock?->harga_satuan
+            ?? $this->productBatch?->product?->harga_jual
+            ?? 0);
+    }
+
+    public function calculateRevenue(int $soldQuantity, ?ConsignmentStock $stock = null): int
+    {
+        return max(0, $soldQuantity) * $this->resolvedUnitPrice($stock);
     }
 }

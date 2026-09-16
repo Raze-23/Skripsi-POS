@@ -131,6 +131,22 @@ class ConsignmentReturnResource extends Resource
                     ->alignCenter()
                     ->badge()
                     ->color('danger'),
+
+                Tables\Columns\TextColumn::make('diskon_persen')
+                    ->label('Diskon')
+                    ->formatStateUsing(fn ($state): string => number_format((float) $state, 2, ',', '.').'%')
+                    ->badge()
+                    ->color(fn ($state): string => (float) $state > 0 ? 'success' : 'gray'),
+
+                Tables\Columns\TextColumn::make('harga_satuan')
+                    ->label('Harga Mitra')
+                    ->money('IDR', locale: 'id')
+                    ->description('per pcs'),
+
+                Tables\Columns\TextColumn::make('omzet_terbentuk')
+                    ->label('Omzet')
+                    ->money('IDR', locale: 'id')
+                    ->weight('bold'),
             ])
             ->filters([
                 Tables\Filters\Filter::make('hari_ini')
@@ -159,6 +175,7 @@ class ConsignmentReturnResource extends Resource
                                     for ($i = $currentYear - 3; $i <= $currentYear + 1; $i++) {
                                         $years[$i] = $i;
                                     }
+
                                     return $years;
                                 })
                                 ->default(now()->year)
@@ -189,8 +206,7 @@ class ConsignmentReturnResource extends Resource
                     ->label('Isi Rincian')
                     ->icon('heroicon-o-pencil-square')
                     ->color('warning')
-                    ->visible(fn (ConsignmentReturn $record) =>
-                        $record->status === 'menunggu_konfirmasi' && Auth::user()?->role === 'mitra'
+                    ->visible(fn (ConsignmentReturn $record) => $record->status === 'menunggu_konfirmasi' && Auth::user()?->role === 'mitra'
                     )
                     ->modalHeading(fn (ConsignmentReturn $record) => "Konfirmasi Rincian: {$record->productBatch->product->nama}")
                     ->modalDescription(function (ConsignmentReturn $record) {
@@ -198,6 +214,7 @@ class ConsignmentReturnResource extends Resource
                             ->where('product_batch_id', $record->product_batch_id)
                             ->first();
                         $jumlah = $stok?->stok_titipan ?? 0;
+
                         return "Total rincian di bawah wajib berjumlah tepat {$jumlah} pcs (sesuai stok titipan saat ini).";
                     })
                     ->modalSubmitActionLabel('Konfirmasi & Selesaikan')
@@ -237,32 +254,35 @@ class ConsignmentReturnResource extends Resource
                     ])
                     ->action(function (ConsignmentReturn $record, array $data, Tables\Actions\Action $action) {
                         $terjual = (int) ($data['terjual'] ?? 0);
-                        $layak   = (int) ($data['qty_layak'] ?? 0);
-                        $rusak   = (int) ($data['qty_rusak'] ?? 0);
-                        $total   = $terjual + $layak + $rusak;
+                        $layak = (int) ($data['qty_layak'] ?? 0);
+                        $rusak = (int) ($data['qty_rusak'] ?? 0);
+                        $total = $terjual + $layak + $rusak;
 
                         $stok = ConsignmentStock::where('partner_id', $record->partner_id)
                             ->where('product_batch_id', $record->product_batch_id)
                             ->first();
 
-                        if (!$stok || $total !== $stok->stok_titipan) {
+                        if (! $stok || $total !== $stok->stok_titipan) {
                             Notification::make()
                                 ->danger()
                                 ->title('Jumlah Tidak Pas!')
-                                ->body("Total rincian ({$total} pcs) harus persis dengan stok titipan (" . ($stok?->stok_titipan ?? 0) . " pcs).")
+                                ->body("Total rincian ({$total} pcs) harus persis dengan stok titipan (".($stok?->stok_titipan ?? 0).' pcs).')
                                 ->send();
                             $action->halt();
                         }
 
                         DB::transaction(function () use ($record, $terjual, $layak, $rusak, $stok) {
-                            $omzet = $terjual * ($record->productBatch->product->harga_jual ?? 0);
+                            $unitPrice = $record->resolvedUnitPrice($stok);
+                            $omzet = $record->calculateRevenue($terjual, $stok);
 
                             $record->update([
-                                'terjual'         => $terjual,
-                                'qty_layak'       => $layak,
-                                'qty_rusak'       => $rusak,
+                                'terjual' => $terjual,
+                                'qty_layak' => $layak,
+                                'qty_rusak' => $rusak,
+                                'diskon_persen' => $stok->diskon_persen ?? $record->diskon_persen,
+                                'harga_satuan' => $unitPrice,
                                 'omzet_terbentuk' => $omzet,
-                                'status'          => 'selesai',
+                                'status' => 'selesai',
                             ]);
 
                             if ($layak > 0) {
@@ -271,10 +291,10 @@ class ConsignmentReturnResource extends Resource
 
                             if ($rusak > 0) {
                                 ProductDisposal::create([
-                                    'product_batch_id'      => $record->product_batch_id,
-                                    'jumlah'                => $rusak,
-                                    'alasan'                => 'Barang Rusak',
-                                    'sumber'                => 'Apotek',
+                                    'product_batch_id' => $record->product_batch_id,
+                                    'jumlah' => $rusak,
+                                    'alasan' => 'Barang Rusak',
+                                    'sumber' => 'Apotek',
                                     'consignment_return_id' => $record->id,
                                 ]);
                             }
@@ -298,11 +318,12 @@ class ConsignmentReturnResource extends Resource
                     ->modalHeading(fn (ConsignmentReturn $record) => "Koreksi Rincian: {$record->productBatch->product->nama}")
                     ->modalDescription(function (ConsignmentReturn $record) {
                         $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
+
                         return "Total rincian di bawah wajib tetap berjumlah {$totalAwal} pcs (sesuai tarikan awal).";
                     })
                     ->modalSubmitActionLabel('Simpan Koreksi')
                     ->fillForm(fn (ConsignmentReturn $record): array => [
-                        'terjual'   => $record->terjual,
+                        'terjual' => $record->terjual,
                         'qty_layak' => $record->qty_layak,
                         'qty_rusak' => $record->qty_rusak,
                     ])
@@ -336,9 +357,9 @@ class ConsignmentReturnResource extends Resource
                     ])
                     ->action(function (ConsignmentReturn $record, array $data, Tables\Actions\Action $action) {
                         $terjualBaru = (int) ($data['terjual'] ?? 0);
-                        $layakBaru   = (int) ($data['qty_layak'] ?? 0);
-                        $rusakBaru   = (int) ($data['qty_rusak'] ?? 0);
-                        
+                        $layakBaru = (int) ($data['qty_layak'] ?? 0);
+                        $rusakBaru = (int) ($data['qty_rusak'] ?? 0);
+
                         $totalBaru = $terjualBaru + $layakBaru + $rusakBaru;
                         $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
 
@@ -348,7 +369,7 @@ class ConsignmentReturnResource extends Resource
                                 ->title('Koreksi Ditolak!')
                                 ->body("Total rincian ({$totalBaru} pcs) harus sama persis dengan tarikan awal ({$totalAwal} pcs).")
                                 ->send();
-                            $action->halt(); 
+                            $action->halt();
                         }
 
                         DB::transaction(function () use ($record, $terjualBaru, $layakBaru, $rusakBaru) {
@@ -362,20 +383,20 @@ class ConsignmentReturnResource extends Resource
                                     ['consignment_return_id' => $record->id],
                                     [
                                         'product_batch_id' => $record->product_batch_id,
-                                        'jumlah'           => $rusakBaru,
-                                        'alasan'           => 'Barang Rusak',
-                                        'sumber'           => 'Apotek',
+                                        'jumlah' => $rusakBaru,
+                                        'alasan' => 'Barang Rusak',
+                                        'sumber' => 'Apotek',
                                     ]
                                 );
                             } else {
                                 ProductDisposal::where('consignment_return_id', $record->id)->delete();
                             }
 
-                            $omzet = $terjualBaru * ($record->productBatch->product->harga_jual ?? 0);
+                            $omzet = $record->calculateRevenue($terjualBaru);
                             $record->update([
-                                'terjual'         => $terjualBaru,
-                                'qty_layak'       => $layakBaru,
-                                'qty_rusak'       => $rusakBaru,
+                                'terjual' => $terjualBaru,
+                                'qty_layak' => $layakBaru,
+                                'qty_rusak' => $rusakBaru,
                                 'omzet_terbentuk' => $omzet,
                             ]);
                         });
@@ -408,6 +429,7 @@ class ConsignmentReturnResource extends Resource
         }
 
         $count = $query->count();
+
         return $count > 0 ? (string) $count : null;
     }
 

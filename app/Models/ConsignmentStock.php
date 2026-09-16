@@ -8,11 +8,16 @@ class ConsignmentStock extends Model
 {
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'diskon_persen' => 'decimal:2',
+        'harga_satuan' => 'integer',
+    ];
+
     public function partner()
     {
         return $this->belongsTo(Partner::class);
     }
-    
+
     public function productBatch()
     {
         return $this->belongsTo(ProductBatch::class);

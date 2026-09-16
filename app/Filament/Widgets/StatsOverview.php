@@ -19,7 +19,7 @@ class StatsOverview extends BaseWidget
     {
         $year = (int) ($this->filters['year'] ?? now()->year);
 
-        $formatRupiah = fn (int $value) => 'Rp ' . number_format($value, 0, ',', '.');
+        $formatRupiah = fn (int $value) => 'Rp '.number_format($value, 0, ',', '.');
 
         $pendapatanKasir = (int) DB::table('transactions')
             ->where('transactions.status', 'Selesai')
@@ -27,11 +27,9 @@ class StatsOverview extends BaseWidget
             ->sum('transactions.total_harga');
 
         $pendapatanApotek = (int) DB::table('consignment_returns')
-            ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
-            ->join('products', 'products.id', '=', 'product_batches.product_id')
             ->whereYear('consignment_returns.created_at', $year)
             ->where('consignment_returns.status', 'selesai')
-            ->sum(DB::raw('CASE WHEN consignment_returns.omzet_terbentuk > 0 THEN consignment_returns.omzet_terbentuk ELSE consignment_returns.terjual * products.harga_jual END'));
+            ->sum('consignment_returns.omzet_terbentuk');
 
         $totalPendapatan = $pendapatanKasir + $pendapatanApotek;
 
@@ -63,13 +61,13 @@ class StatsOverview extends BaseWidget
         return [
             Stat::make('Total Pendapatan', $formatRupiah($totalPendapatan))
                 ->color('success')
-                ->description('Total pendapatan tahun ' . $year)
+                ->description('Total pendapatan tahun '.$year)
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->chart([7, 4, 6, 10, 14, 15, 18]),
 
             Stat::make('Total Pengeluaran', $formatRupiah($totalPengeluaran))
                 ->color('danger')
-                ->description('Biaya produksi tahun ' . $year)
+                ->description('Biaya produksi tahun '.$year)
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->chart([15, 14, 16, 14, 13, 11, 12]),
 

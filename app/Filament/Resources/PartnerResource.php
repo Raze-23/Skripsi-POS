@@ -7,6 +7,7 @@ use App\Filament\Resources\PartnerResource\Pages;
 use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentReturnsRelationManager;
 use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentStockRelationManager;
 use App\Models\Partner;
+use App\Models\ProductBatch;
 use Filament\Forms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
@@ -23,7 +24,7 @@ class PartnerResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-s-home-modern';
 
     protected static ?string $cluster = Stock::class;
- 
+
     protected static ?string $navigationLabel = 'Apotek';
 
     protected static ?string $breadCrumb = 'Stok';
@@ -36,58 +37,56 @@ class PartnerResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Grid::make(3)
+                Forms\Components\Section::make('Data Kemitraan')
+                    ->description('Admin hanya mengelola identitas apotek dan tanggal dimulainya kerja sama.')
+                    ->icon('heroicon-o-building-storefront')
                     ->schema([
-                        Forms\Components\Section::make('Informasi Apotek')
-                            ->schema([
-                                Forms\Components\TextInput::make('nama_apotek')
-                                    ->label('Nama Apotek')
-                                    ->rule('required') 
-                                    ->markAsRequired() 
-                                    ->maxLength(255)
-                                    ->validationMessages([
-                                        'required' => 'Nama apotek wajib diisi.',
-                                    ]),
-                                Forms\Components\Textarea::make('alamat')
-                                    ->label('Alamat Lengkap')
-                                    ->rule('required') 
-                                    ->markAsRequired()
-                                    ->rows(3)
-                                    ->validationMessages([
-                                        'required' => 'Alamat lengkap apotek wajib diisi.',
-                                    ]),
-                            ])
-                            ->columnSpan(2),
-                        Forms\Components\Group::make()
-                            ->schema([
-                                Forms\Components\Section::make('Kontak & Status')
-                                    ->schema([
-                                        Forms\Components\TextInput::make('no_telp')
-                                            ->label('Nomor Telepon')
-                                            ->tel()
-                                            ->rule('min:10')
-                                            ->maxLength(15)
-                                            ->rule('regex:/^(\+62|62|08)[0-9]+$/') 
-                                            ->validationMessages([
-                                                'min' => 'Nomor telepon tidak valid, minimal 10 digit.',
-                                                'regex' => 'Format tidak valid. Harus berupa angka dan diawali dengan 08, 62, atau +62.',
-                                            ]),
-                                        Forms\Components\Toggle::make('is_active')
-                                            ->label('Status Kemitraan')
-                                            ->helperText('Nonaktifkan jika kerjasama berakhir')
-                                            ->default(true)
-                                            ->onColor('success')
-                                            ->offColor('danger')
-                                            ->visibleOn('edit'),
-                                    ]),
-                                DatePicker::make('tanggal_kerja_sama')
-                                    ->label('Kerja Sama Sejak')
-                                    ->default(today())
-                                    ->native(false)
-                                    ->displayFormat('d F Y')
-                            ])
-                            ->columnSpan(1),
-                    ]),
+                        Forms\Components\TextInput::make('nama_apotek')
+                            ->label('Nama Apotek')
+                            ->prefixIcon('heroicon-o-building-storefront')
+                            ->required()
+                            ->maxLength(255)
+                            ->validationMessages([
+                                'required' => 'Nama apotek wajib diisi.',
+                            ]),
+
+                        DatePicker::make('tanggal_kerja_sama')
+                            ->label('Tanggal Kerja Sama')
+                            ->prefixIcon('heroicon-o-calendar-days')
+                            ->default(today())
+                            ->native(false)
+                            ->displayFormat('d F Y')
+                            ->required()
+                            ->validationMessages([
+                                'required' => 'Tanggal kerja sama wajib dipilih.',
+                            ]),
+                    ])
+                    ->columns(2),
+
+                Forms\Components\Section::make('Informasi dari Profil Mitra')
+                    ->description('Nomor telepon dan alamat dikelola langsung oleh Mitra melalui halaman profil mereka.')
+                    ->icon('heroicon-o-identification')
+                    ->schema([
+                        Forms\Components\Placeholder::make('partner_phone_info')
+                            ->label('Nomor Telepon')
+                            ->content(fn (?Partner $record): string => filled($record?->no_telp)
+                                ? $record->no_telp
+                                : 'Belum dilengkapi oleh Mitra'),
+
+                        Forms\Components\Placeholder::make('partner_status_info')
+                            ->label('Status Kemitraan')
+                            ->content(fn (?Partner $record): string => $record?->is_active === false
+                                ? 'Tidak Aktif'
+                                : 'Aktif'),
+
+                        Forms\Components\Placeholder::make('partner_address_info')
+                            ->label('Alamat Lengkap')
+                            ->content(fn (?Partner $record): string => filled($record?->alamat)
+                                ? $record->alamat
+                                : 'Belum dilengkapi oleh Mitra')
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2),
             ]);
     }
 
@@ -104,10 +103,20 @@ class PartnerResource extends Resource
                     ->label('Nomor Telepon')
                     ->icon('heroicon-m-phone')
                     ->copyable()
+                    ->placeholder('Belum dilengkapi')
                     ->color('gray'),
                 Tables\Columns\TextColumn::make('alamat')
                     ->label('Alamat')
-                    ->searchable(),
+                    ->searchable()
+                    ->placeholder('Belum dilengkapi')
+                    ->wrap()
+                    ->limit(55)
+                    ->tooltip(fn (Partner $record): ?string => filled($record->alamat) ? $record->alamat : null),
+                Tables\Columns\TextColumn::make('tanggal_kerja_sama')
+                    ->label('Kerja Sama Sejak')
+                    ->date('d M Y')
+                    ->placeholder('-')
+                    ->sortable(),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('Status')
                     ->boolean()
@@ -122,7 +131,7 @@ class PartnerResource extends Resource
                             ->where('stok_titipan', '>', 0)
                             ->whereHas('productBatch', function ($q) {
                                 $q->whereNotNull('tanggal_kedaluwarsa')
-                                  ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30));
+                                    ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30));
                             })
                             ->count();
                     })
@@ -165,9 +174,9 @@ class PartnerResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $jumlahKritis = \App\Models\ProductBatch::whereHas('consignmentStocks', function ($query) {
-                $query->where('stok_titipan', '>', 0);
-            })
+        $jumlahKritis = ProductBatch::whereHas('consignmentStocks', function ($query) {
+            $query->where('stok_titipan', '>', 0);
+        })
             ->whereNotNull('tanggal_kedaluwarsa')
             ->whereDate('tanggal_kedaluwarsa', '<=', now()->addDays(30))
             ->count();

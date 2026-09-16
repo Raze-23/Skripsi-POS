@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\PartnerResource\RelationManagers;
 
-use App\Models\ConsignmentDelivery;
 use App\Models\ConsignmentReturn;
 use App\Models\ProductBatch;
-use App\Models\ProductDisposal;
-use App\Models\Sales; 
+use App\Models\Sales;
+use App\Services\ConsignmentDeliveryService;
 use Closure;
+use DomainException;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -23,7 +23,9 @@ use Illuminate\Support\Facades\DB;
 class ConsignmentStockRelationManager extends RelationManager
 {
     protected static string $relationship = 'consignmentStocks';
+
     protected static ?string $title = 'Produk titipan';
+
     protected static ?string $breadcrumb = 'Menitipkan Produk';
 
     public function form(Form $form): Form
@@ -53,6 +55,18 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->badge()
                     ->color('success')
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('diskon_persen')
+                    ->label('Diskon')
+                    ->formatStateUsing(fn ($state): string => number_format((float) $state, 2, ',', '.').'%')
+                    ->badge()
+                    ->color(fn ($state): string => (float) $state > 0 ? 'success' : 'gray'),
+
+                Tables\Columns\TextColumn::make('harga_satuan')
+                    ->label('Harga Mitra')
+                    ->money('IDR', locale: 'id')
+                    ->description('per pcs')
+                    ->weight('semibold'),
             ])
             ->headerActions([
                 Tables\Actions\Action::make('titip_stok')
@@ -84,7 +98,7 @@ class ConsignmentStockRelationManager extends RelationManager
                                     ->whereDate('tanggal_kedaluwarsa', '>=', now())
                                     ->with('product')
                                     ->get()
-                                    ->mapWithKeys(fn ($b) => [$b->id => $b->product->nama . ' — ' . $b->batch_code . ' (Stok: ' . $b->stok_toko . ')'])
+                                    ->mapWithKeys(fn ($b) => [$b->id => $b->product->nama.' — '.$b->batch_code.' (Stok: '.$b->stok_toko.')'])
                                 )
                                 ->searchable()
                                 ->preload()
@@ -121,34 +135,71 @@ class ConsignmentStockRelationManager extends RelationManager
                                     };
                                 }),
                         ]),
+
+                        Forms\Components\Grid::make(2)->schema([
+                            Forms\Components\TextInput::make('diskon_persen')
+                                ->label('Diskon Harga Mitra (Opsional)')
+                                ->prefixIcon('heroicon-o-receipt-percent')
+                                ->suffix('%')
+                                ->numeric()
+                                ->minValue(0)
+                                ->maxValue(100)
+                                ->step(0.01)
+                                ->live(debounce: 250)
+                                ->nullable()
+                                ->helperText('Kosongkan jika produk dikirim dengan harga normal.')
+                                ->validationMessages([
+                                    'min' => 'Diskon tidak boleh kurang dari 0%.',
+                                    'max' => 'Diskon tidak boleh lebih dari 100%.',
+                                ]),
+
+                            Forms\Components\Placeholder::make('harga_setelah_diskon')
+                                ->label('Harga Jual Mitra')
+                                ->content(function (Get $get): string {
+                                    $batch = ProductBatch::with('product')->find($get('product_batch_id'));
+                                    if (! $batch) {
+                                        return 'Pilih batch produk terlebih dahulu';
+                                    }
+
+                                    $discount = min(100, max(0, (float) ($get('diskon_persen') ?? 0)));
+
+                                    return 'Rp '.number_format(
+                                        ConsignmentDeliveryService::discountedPrice((int) $batch->product->harga_jual, $discount),
+                                        0,
+                                        ',',
+                                        '.',
+                                    ).' / pcs';
+                                }),
+                        ]),
                     ])
-                    ->action(function (array $data) {
-                        $batch = ProductBatch::find($data['product_batch_id']);
+                    ->action(function (array $data, Tables\Actions\Action $action) {
+                        $batch = ProductBatch::with('product')->find($data['product_batch_id']);
                         $jumlah = (int) ($data['jumlah'] ?? 0);
-                        $salesId = $data['sales_id'];
+                        $discount = $data['diskon_persen'] ?? 0;
 
-                        DB::transaction(function () use ($batch, $jumlah, $salesId) {
-                            $batch->decrement('stok_toko', $jumlah);
-            
-                            $consignment = $this->getOwnerRecord()->consignmentStocks()
-                                ->firstOrCreate(
-                                    ['product_batch_id' => $batch->id],
-                                    ['stok_titipan' => 0]
-                                );
-                            $consignment->increment('stok_titipan', $jumlah);
+                        try {
+                            $delivery = app(ConsignmentDeliveryService::class)->deliver(
+                                partnerId: $this->getOwnerRecord()->id,
+                                productBatchId: (int) $data['product_batch_id'],
+                                salesId: (int) $data['sales_id'],
+                                quantity: $jumlah,
+                                discountPercent: $discount,
+                            );
+                        } catch (DomainException $exception) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Stok Gagal Dikirim')
+                                ->body($exception->getMessage())
+                                ->send();
+                            $action->halt();
 
-                            ConsignmentDelivery::create([
-                                'partner_id' => $this->getOwnerRecord()->id,
-                                'product_batch_id' => $batch->id,
-                                'sales_id' => $salesId,
-                                'jumlah' => $jumlah,
-                            ]);
-                        });
+                            return;
+                        }
 
                         Notification::make()
                             ->success()
                             ->title('Stok Titipan Terkirim!')
-                            ->body("Berhasil mengirim {$jumlah} pcs {$batch->product->nama} (Batch: {$batch->batch_code}).")
+                            ->body("Berhasil mengirim {$jumlah} pcs {$batch->product->nama} dengan harga Rp ".number_format($delivery->harga_satuan, 0, ',', '.')." per pcs (Batch: {$batch->batch_code}).")
                             ->icon('heroicon-o-check-badge')
                             ->send();
                     }),
@@ -165,7 +216,7 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->visible(function () {
                         return Auth::user()?->role !== 'mitra';
                     })
-                    ->mountUsing(function (Model $record, ?Forms\Form $form, Tables\Actions\Action $action) {
+                    ->mountUsing(function (Model $record, ?Form $form, Tables\Actions\Action $action) {
                         $sudahDiajukan = ConsignmentReturn::where('product_batch_id', $record->product_batch_id)
                             ->where('partner_id', $this->getOwnerRecord()->id)
                             ->where('status', 'menunggu_konfirmasi')
@@ -212,14 +263,16 @@ class ConsignmentStockRelationManager extends RelationManager
                             }
 
                             ConsignmentReturn::create([
-                                'partner_id'       => $this->getOwnerRecord()->id,
-                                'product_batch_id'  => $record->product_batch_id,
-                                'sales_id'          => $data['sales_id'],
-                                'terjual'           => 0,
-                                'qty_layak'         => 0,
-                                'qty_rusak'         => 0,
-                                'omzet_terbentuk'   => 0,
-                                'status'            => 'menunggu_konfirmasi',
+                                'partner_id' => $this->getOwnerRecord()->id,
+                                'product_batch_id' => $record->product_batch_id,
+                                'sales_id' => $data['sales_id'],
+                                'terjual' => 0,
+                                'qty_layak' => 0,
+                                'qty_rusak' => 0,
+                                'diskon_persen' => $record->diskon_persen,
+                                'harga_satuan' => $record->harga_satuan,
+                                'omzet_terbentuk' => 0,
+                                'status' => 'menunggu_konfirmasi',
                             ]);
 
                             $berhasil = true;

@@ -2,11 +2,14 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Forms\Components\TextInput;
+use App\Filament\Widgets\DailyOutflowChart;
+use App\Filament\Widgets\MonthlyRevenueTrendChart;
+use App\Filament\Widgets\StatsOverview;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Forms\Form;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,6 +22,15 @@ class Dashboard extends \Filament\Pages\Dashboard
     public static function canAccess(): bool
     {
         return in_array(Auth::user()?->role, ['admin', 'owner']);
+    }
+
+    public function getWidgets(): array
+    {
+        return [
+            StatsOverview::class,
+            MonthlyRevenueTrendChart::class,
+            DailyOutflowChart::class,
+        ];
     }
 
     public function filtersForm(Form $form): Form
@@ -40,7 +52,7 @@ class Dashboard extends \Filament\Pages\Dashboard
                     ->extraInputAttributes([
                         'class' => 'font-bold text-lg',
                         'style' => 'text-align: center !important;',
-                        'inputmode' => 'numeric', 
+                        'inputmode' => 'numeric',
                         'pattern' => '[0-9]*',
                     ])
                     ->prefixAction(

@@ -11,7 +11,16 @@ class CreatePartner extends CreateRecord
 {
     protected static string $resource = PartnerResource::class;
 
-        protected static ?string $title = 'Tambah Apotek Mitra';
+    protected static ?string $title = 'Tambah Apotek Mitra';
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $data['alamat'] = 'Belum dilengkapi oleh Mitra';
+        $data['no_telp'] = null;
+        $data['is_active'] = true;
+
+        return $data;
+    }
 
     #[Override]
     protected function getFormActions(): array
@@ -40,6 +49,4 @@ class CreatePartner extends CreateRecord
             ->title('Apotek Tersimpan!')
             ->body('Data apotek berhasil ditambahkan dan disimpan.');
     }
-
-
 }

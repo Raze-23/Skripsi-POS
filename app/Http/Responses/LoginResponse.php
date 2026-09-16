@@ -18,7 +18,7 @@ class LoginResponse implements LoginResponseContract
         }
 
         if ($user && $user->role === 'mitra') {
-            return redirect()->to('/consignment-returns');
+            return redirect()->to('/mitra');
         }
 
         return redirect()->intended(filament()->getUrl());

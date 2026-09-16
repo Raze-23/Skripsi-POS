@@ -15,7 +15,7 @@ class MonthlyRevenueTrendChart extends ChartWidget
 
     protected static ?int $sort = 2;
 
-    protected int | string | array $columnSpan = 1;
+    protected int|string|array $columnSpan = 1;
 
     protected function getData(): array
     {
@@ -31,13 +31,11 @@ class MonthlyRevenueTrendChart extends ChartWidget
             ->pluck('total', 'bulan');
 
         $apotekPerMonth = DB::table('consignment_returns')
-            ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
-            ->join('products', 'products.id', '=', 'product_batches.product_id')
             ->whereYear('consignment_returns.created_at', $year)
             ->where('consignment_returns.status', 'selesai')
             ->select(
                 DB::raw('MONTH(consignment_returns.created_at) as bulan'),
-                DB::raw('SUM(CASE WHEN consignment_returns.omzet_terbentuk > 0 THEN consignment_returns.omzet_terbentuk ELSE consignment_returns.terjual * products.harga_jual END) as total')
+                DB::raw('SUM(consignment_returns.omzet_terbentuk) as total')
             )
             ->groupBy('bulan')
             ->pluck('total', 'bulan');
