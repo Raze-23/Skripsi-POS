@@ -64,11 +64,7 @@
             </x-slot>
 
             <x-slot name="headerEnd">
-                <div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-success-500"></span>
-                    </span>
+                <div class="text-xs font-medium" style="color: red;">
                     Live
                 </div>
             </x-slot>
@@ -106,7 +102,7 @@
                     <div class="py-3 md:px-6 md:py-1 flex flex-col justify-center">
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nilai Preferensi (Vi)</p>
                         <p class="mt-1 text-2xl font-black tracking-tight text-primary-600 dark:text-primary-400">
-                            {{ number_format($topProduct['score'], 4, ',', '.') }}
+                            {{ number_format(ceil($topProduct['score'] * 1000) / 1000, 3, ',', '.') }}
                         </p>
                     </div>
 
@@ -166,7 +162,6 @@
                             <div class="flex items-center justify-between gap-4">
 
                                 {{-- Kiri: Urutan & Nama --}}
-                                {{-- Menggunakan gap-6 agar jarak kotak rank dan teks produk sangat lega --}}
                                 <div class="flex items-center gap-6 min-w-0">
 
                                     {{-- Kotak Nomor Rank (Murni Hitam Putih Elegan) --}}
@@ -200,7 +195,7 @@
 
                                     <div class="text-right w-16">
                                         <span class="text-base font-bold text-gray-900 dark:text-white">
-                                            {{ number_format($item['score'], 4, ',', '.') }}
+                                            {{ number_format(ceil($item['score'] * 1000) / 1000, 3, ',', '.') }}
                                         </span>
                                     </div>
                                 </div>
@@ -209,6 +204,7 @@
                     @endforeach
                 </div>
             </x-filament::section>
+
             {{-- ── 3. MATRIKS KEPUTUSAN ──────────────────────────────────────── --}}
             <x-filament::section collapsible collapsed>
                 <x-slot name="heading">
@@ -261,7 +257,7 @@
                                     </td>
                                     <td class="py-2.5 pl-4 text-right">
                                         <span class="font-semibold text-gray-900 dark:text-white">
-                                            {{ number_format($item['score'], 4, ',', '.') }}
+                                            {{ number_format(ceil($item['score'] * 1000) / 1000, 3, ',', '.') }}
                                         </span>
                                     </td>
                                 </tr>
