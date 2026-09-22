@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\TransactionResource\Actions;
 
-use App\Models\Transaction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\Action;
 use Illuminate\Support\Carbon;
@@ -15,32 +14,34 @@ class ExportTransactionCsvAction
             ->label('Ekspor CSV')
             ->icon('heroicon-o-document-plus')
             ->color('success')
-            ->action(function () {
-                if (! Transaction::exists()) {
+            ->action(function ($livewire) {
+                $query = $livewire->getFilteredTableQuery();
+
+                if (! (clone $query)->exists()) {
                     Notification::make()
                         ->warning()
                         ->title('Tidak Ada Data Transaksi')
-                        ->body('Belum ada data transaksi kasir untuk diekspor ke CSV.')
+                        ->body('Tidak ada data transaksi yang sesuai dengan filter saat ini untuk diekspor ke CSV.')
                         ->send();
 
                     return;
                 }
 
-                return response()->streamDownload(function () {
+                return response()->streamDownload(function () use ($query) {
                     $file = fopen('php://output', 'w');
                     fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
                     fputcsv($file, [
-                        'ID', 
-                        'Waktu Transaksi', 
-                        'Total Harga (Rp)', 
-                        'Diskon (%)', 
-                        'Nominal Bayar (Rp)', 
-                        'Kembalian (Rp)', 
+                        'ID',
+                        'Waktu Transaksi',
+                        'Total Harga (Rp)',
+                        'Diskon (%)',
+                        'Nominal Bayar (Rp)',
+                        'Kembalian (Rp)',
                         'Status'
                     ], ';');
-                    
-                    Transaction::with('kasir')->chunk(250, function ($transactions) use ($file) {
+
+                    $query->chunk(250, function ($transactions) use ($file) {
                         foreach ($transactions as $trx) {
                             fputcsv($file, [
                                 $trx->id,

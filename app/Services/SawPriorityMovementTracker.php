@@ -91,10 +91,12 @@ class SawPriorityMovementTracker
             ? null
             : round($snapshot->current_score - $previousScore, 4);
 
+        $poinDelta = $scoreDelta === null ? null : round($scoreDelta * 100, 2);
+
         [$type, $label] = match (true) {
             $previousRank === null => ['new', 'Baru dianalisis'],
-            $rankDelta > 0 => ['up', 'Naik '.$rankDelta.' peringkat'],
-            $rankDelta < 0 => ['down', 'Turun '.abs($rankDelta).' peringkat'],
+            $rankDelta > 0 => ['up', $this->formatRankLabel('Naik', $rankDelta, $scoreDelta)],
+            $rankDelta < 0 => ['down', $this->formatRankLabel('Turun', abs($rankDelta), $scoreDelta)],
             $scoreDelta > 0 => ['score_up', 'Skor +'.number_format($scoreDelta, 4, ',', '.')],
             $scoreDelta < 0 => ['score_down', 'Skor '.number_format($scoreDelta, 4, ',', '.')],
             $this->metricsDiffer($snapshot->previous_metrics, $snapshot->current_metrics) => ['changed', 'Data kriteria berubah'],
@@ -106,9 +108,23 @@ class SawPriorityMovementTracker
             'label' => $label,
             'rank_delta' => $rankDelta,
             'score_delta' => $scoreDelta,
+            'poin_delta' => $poinDelta,
             'criteria_deltas' => $this->criteriaDeltas($snapshot),
             'changed_at' => $snapshot->changed_at,
         ];
+    }
+
+    private function formatRankLabel(string $arah, int $rankDelta, ?float $scoreDelta): string
+    {
+        $label = $arah.' '.$rankDelta.' Peringkat';
+
+        if ($scoreDelta !== null && $scoreDelta != 0.0) {
+            $tanda = $scoreDelta > 0 ? '+' : '-';
+            // Ubah menjadi 4 angka desimal, dan ganti kata 'Poin' menjadi 'Skor'
+            $label .= ' ('.$tanda.number_format(abs($scoreDelta), 4, ',', '.').' Skor)';
+        }
+
+        return $label;
     }
 
     private function criteriaDeltas(SawPrioritySnapshot $snapshot): array

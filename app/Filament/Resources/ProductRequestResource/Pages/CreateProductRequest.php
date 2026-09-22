@@ -8,6 +8,7 @@ use App\Models\ProductRequest;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 
@@ -17,8 +18,6 @@ class CreateProductRequest extends Page
 
     protected static string $view = 'filament.resources.product-request-resource.pages.create-product-request';
 
-    protected static ?string $title = 'Buat Request Produk';
-
     public string $search = '';
 
     public ?int $selectedProductId = null;
@@ -26,6 +25,11 @@ class CreateProductRequest extends Page
     public int $jumlah = 1;
 
     public ?string $diskonPersen = null;
+
+    public function getTitle(): string | Htmlable
+    {
+        return Auth::user()?->role === 'owner' ? 'Buat Usulan Produksi' : 'Buat Request Produk';
+    }
 
     public static function canAccess(array $parameters = []): bool
     {
@@ -73,7 +77,6 @@ class CreateProductRequest extends Page
     {
         if (! $this->selectedProductId) {
             $this->jumlah = 1;
-
             return;
         }
 
@@ -93,12 +96,8 @@ class CreateProductRequest extends Page
                 : ['nullable'],
         ], [
             'selectedProductId.required' => 'Pilih produk terlebih dahulu.',
-            'selectedProductId.exists' => 'Produk tidak valid.',
             'jumlah.required' => 'Jumlah wajib diisi.',
             'jumlah.min' => 'Jumlah minimal 1 pcs.',
-            'diskonPersen.numeric' => 'Diskon harus berupa angka.',
-            'diskonPersen.min' => 'Diskon tidak boleh kurang dari 0%.',
-            'diskonPersen.max' => 'Diskon tidak boleh lebih dari 100%.',
         ]);
 
         ProductRequest::create([
@@ -111,18 +110,20 @@ class CreateProductRequest extends Page
                 default => 'produksi_owner',
             },
             'jumlah' => $this->jumlah,
-            'diskon_persen' => $user->role === 'mitra'
-                ? round((float) ($this->diskonPersen ?? 0), 2)
-                : 0,
+            'diskon_persen' => $user->role === 'mitra' ? round((float) ($this->diskonPersen ?? 0), 2) : 0,
             'status' => ProductRequest::STATUS_PENDING,
         ]);
 
         Notification::make()
             ->success()
-            ->title('Request Berhasil Dibuat!')
-            ->body($user->role === 'mitra'
-                ? 'Permintaan produk dan diskon Anda telah masuk dan menunggu keputusan Admin.'
-                : 'Permintaan produksi Anda telah masuk ke sistem dan menunggu proses Admin.')
+            ->title(match ($user->role) {
+                'owner' => 'Usulan Berhasil Dibuat!',
+                'mitra' => 'Request Berhasil Dibuat!',
+                default => 'Berhasil Dibuat!',
+            })
+            ->body($user->role === 'owner'
+                ? 'Usulan produksi Anda telah masuk ke sistem dan menunggu persetujuan Admin.'
+                : 'Permintaan produk Anda telah masuk dan menunggu keputusan Admin.')
             ->send();
 
         $this->redirect(static::getResource()::getUrl('index'));

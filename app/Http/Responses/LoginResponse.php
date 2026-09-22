@@ -18,7 +18,11 @@ class LoginResponse implements LoginResponseContract
         }
 
         if ($user && $user->role === 'mitra') {
-            return redirect()->to('/mitra');
+            return redirect()->to(\App\Filament\Mitra\Pages\Welcome::getUrl());
+        }
+
+        if ($user && $user->role === 'owner') {
+            return redirect()->to(\App\Filament\Pages\Welcome::getUrl());
         }
 
         return redirect()->intended(filament()->getUrl());

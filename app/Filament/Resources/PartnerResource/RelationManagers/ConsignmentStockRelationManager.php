@@ -73,6 +73,7 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->label('Kirim Stok Titipan')
                     ->icon('heroicon-o-truck')
                     ->color('primary')
+                    ->visible(fn () => $this->getOwnerRecord()->users()->exists())
                     ->modalHeading('Kirim Stok ke Mitra')
                     ->modalDescription('Kirim stok untuk mitra apotek dan catat sales yang mengantarnya.')
                     ->modalSubmitActionLabel('Kirim Produk')

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ProductRequestResource\Pages;
 use App\Filament\Resources\ProductRequestResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Auth;
 
 class ListProductRequests extends ListRecords
 {
@@ -14,7 +15,7 @@ class ListProductRequests extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Buat Request Baru')
+                ->label(fn () => Auth::user()?->role === 'owner' ? 'Buat Usulan Produksi' : 'Buat Request Baru')
                 ->icon('heroicon-o-plus-circle')
                 ->color('primary'),
         ];

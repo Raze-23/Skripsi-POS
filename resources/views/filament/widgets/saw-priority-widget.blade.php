@@ -30,13 +30,8 @@
     ];
 
     $movementMap = [
-        'new' => ['color' => 'info', 'icon' => 'heroicon-m-sparkles'],
         'up' => ['color' => 'success', 'icon' => 'heroicon-m-arrow-trending-up'],
         'down' => ['color' => 'danger', 'icon' => 'heroicon-m-arrow-trending-down'],
-        'score_up' => ['color' => 'success', 'icon' => 'heroicon-m-arrow-up'],
-        'score_down' => ['color' => 'warning', 'icon' => 'heroicon-m-arrow-down'],
-        'changed' => ['color' => 'info', 'icon' => 'heroicon-m-arrows-right-left'],
-        'stable' => ['color' => 'gray', 'icon' => 'heroicon-m-minus'],
     ];
 
     $topProduct = $rankedProducts[0] ?? null;
@@ -155,16 +150,12 @@
                         @php
                             $factor = $factorMap[$item['faktor_utama']] ?? $factorMap['penjualan'];
                             $movement = $item['movement'];
-                            $movementInfo = $movementMap[$movement['type']] ?? $movementMap['stable'];
+                            $movementInfo = $movementMap[$movement['type']] ?? null;
                         @endphp
 
                         <div class="py-4 first:pt-0 last:pb-0">
                             <div class="flex items-center justify-between gap-4">
-
-                                {{-- Kiri: Urutan & Nama --}}
                                 <div class="flex items-center gap-6 min-w-0">
-
-                                    {{-- Kotak Nomor Rank (Murni Hitam Putih Elegan) --}}
                                     <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-gray-900 ring-1 ring-inset ring-gray-300 dark:bg-gray-900 dark:text-white dark:ring-gray-700">
                                         {{ $loop->iteration }}
                                     </span>
@@ -182,10 +173,8 @@
                                         </p>
                                     </div>
                                 </div>
-
-                                {{-- Kanan: Badge Perubahan & Skor Vi --}}
                                 <div class="flex flex-shrink-0 items-center gap-4">
-                                    @if ($movement['type'] !== 'stable')
+                                    @if (in_array($movement['type'], ['up', 'down'], true))
                                         <div class="hidden sm:block">
                                             <x-filament::badge :color="$movementInfo['color']" :icon="$movementInfo['icon']" size="sm">
                                                 {{ $movement['label'] }}

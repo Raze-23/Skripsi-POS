@@ -411,12 +411,17 @@ class UserResource extends Resource
 
                             $action->halt();
                         })
-                        ->successNotification(
-                            Notification::make()
+                        ->successNotification(function (Collection $records) {
+                            $count = $records->count();
+                            
+                            return Notification::make()
                                 ->success()
-                                ->title('Hapus Masal Berhasil')
-                                ->body('Semua akun yang dipilih telah dihapus.')
-                        ),
+                                ->title($count === 1 ? 'Akun Terhapus' : "{$count} Akun Terhapus")
+                                ->body($count === 1 
+                                    ? 'Akun pengguna telah dihapus secara permanen.' 
+                                    : 'Semua akun yang dipilih telah dihapus.'
+                                );
+                        }),
                 ]),
             ]);
     }

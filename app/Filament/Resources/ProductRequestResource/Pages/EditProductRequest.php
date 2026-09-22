@@ -4,8 +4,9 @@ namespace App\Filament\Resources\ProductRequestResource\Pages;
 
 use App\Filament\Resources\ProductRequestResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Auth;
 
 class EditProductRequest extends EditRecord
 {
@@ -15,14 +16,14 @@ class EditProductRequest extends EditRecord
     {
         return [
             Actions\DeleteAction::make()
-                ->label('Batalkan Request')
+                ->label(fn () => Auth::user()?->role === 'owner' ? 'Batalkan Usulan' : 'Batalkan Request')
                 ->icon('heroicon-o-trash')
                 ->color('danger')
                 ->successNotification(
                     Notification::make()
                         ->success()
-                        ->title('Request Dibatalkan')
-                        ->body('Permintaan produk telah berhasil dihapus/dibatalkan.')
+                        ->title('Dibatalkan')
+                        ->body('Data berhasil dihapus/dibatalkan.')
                 ),
         ];
     }
@@ -37,6 +38,6 @@ class EditProductRequest extends EditRecord
         return Notification::make()
             ->success()
             ->title('Perubahan Tersimpan!')
-            ->body('Detail request produk telah berhasil diperbarui.');
+            ->body('Data berhasil diperbarui.');
     }
 }

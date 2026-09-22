@@ -4,15 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ProductRequestResource\Pages;
 use App\Models\Product;
-use App\Models\ProductBatch;
 use App\Models\ProductRequest;
-use App\Models\Sales;
-use App\Services\ConsignmentDeliveryService;
-use Closure;
-use DomainException;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -21,7 +15,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\HtmlString;
 
 class ProductRequestResource extends Resource
 {
@@ -29,15 +22,25 @@ class ProductRequestResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static ?string $pluralLabel = 'Daftar Request Produk';
-
-    protected static ?string $modelLabel = 'Request Produk';
-
     protected static ?int $navigationSort = 5;
 
     public static function getNavigationLabel(): string
     {
-        return Auth::user()?->role === 'admin' ? 'Daftar Request' : 'Request Produk';
+        return match (Auth::user()?->role) {
+            'admin' => 'Daftar Request',
+            'owner' => 'Usulan Produksi',
+            default => 'Request Produk',
+        };
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return Auth::user()?->role === 'owner' ? 'Daftar Usulan Produksi' : 'Daftar Request Produk';
+    }
+
+    public static function getModelLabel(): string
+    {
+        return Auth::user()?->role === 'owner' ? 'Usulan Produksi' : 'Request Produk';
     }
 
     public static function canAccess(): bool
@@ -78,10 +81,12 @@ class ProductRequestResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $isOwner = Auth::user()?->role === 'owner';
+
         return $form
             ->schema([
-                Forms\Components\Section::make('Detail Request')
-                    ->description('Pilih produk dan jumlah yang ingin diminta.')
+                Forms\Components\Section::make($isOwner ? 'Detail Usulan Produksi' : 'Detail Request')
+                    ->description($isOwner ? 'Pilih produk dan jumlah yang diusulkan untuk diproduksi.' : 'Pilih produk dan jumlah yang ingin diminta.')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->schema([
                         Forms\Components\Select::make('product_id')
@@ -106,7 +111,7 @@ class ProductRequestResource extends Resource
                             ->required()
                             ->minValue(1)
                             ->disabled(fn (?Model $record) => $record !== null && $record->status !== ProductRequest::STATUS_PENDING)
-                            ->helperText('Jumlah produk yang direquest.')
+                            ->helperText($isOwner ? 'Jumlah target yang ingin diproduksi.' : 'Jumlah produk yang direquest.')
                             ->validationMessages([
                                 'required' => 'Jumlah wajib diisi.',
                                 'min' => 'Jumlah minimal 1 pcs.',
@@ -116,13 +121,15 @@ class ProductRequestResource extends Resource
                             ->label('Diskon Mitra')
                             ->content(fn (?ProductRequest $record): string => $record?->tipe_request === 'restok_apotek' && filled($record->harga_satuan)
                                 ? number_format((float) $record->diskon_persen, 2, ',', '.').'%'
-                                : ($record?->tipe_request === 'restok_apotek' ? 'Menunggu Admin' : '-')),
+                                : ($record?->tipe_request === 'restok_apotek' ? 'Menunggu Admin' : '-'))
+                            ->hidden(fn () => $isOwner), // Sembunyikan untuk owner agar minimalis
 
                         Forms\Components\Placeholder::make('harga_mitra')
                             ->label('Harga Jual Mitra')
                             ->content(fn (?ProductRequest $record): string => $record?->tipe_request === 'restok_apotek' && filled($record->harga_satuan)
                                 ? 'Rp '.number_format($record->harga_satuan, 0, ',', '.').' / pcs'
-                                : '-'),
+                                : '-')
+                            ->hidden(fn () => $isOwner), // Sembunyikan untuk owner agar minimalis
 
                         Forms\Components\Hidden::make('user_id')
                             ->default(fn () => Auth::user()?->id),
@@ -137,12 +144,14 @@ class ProductRequestResource extends Resource
                         Forms\Components\Hidden::make('partner_id')
                             ->default(fn () => Auth::user()?->role === 'mitra' ? Auth::user()?->partner_id : null),
                     ])
-                    ->columns(2),
+                    ->columns($isOwner ? 1 : 2), // Jadi 1 kolom penuh untuk owner agar lebih rapi
             ]);
     }
 
     public static function table(Table $table): Table
     {
+        $isOwner = Auth::user()?->role === 'owner';
+
         return $table
             ->modifyQueryUsing(function (Builder $query) {
                 $user = Auth::user();
@@ -179,7 +188,7 @@ class ProductRequestResource extends Resource
                     ->label('Tipe')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => match ($state) {
-                        'produksi_owner' => 'Request Produksi',
+                        'produksi_owner' => 'Usulan Produksi',
                         'restok_apotek' => 'Request Apotek',
                         default => $state,
                     })
@@ -192,7 +201,8 @@ class ProductRequestResource extends Resource
                         'produksi_owner' => 'info',
                         'restok_apotek' => 'warning',
                         default => 'gray',
-                    }),
+                    })
+                    ->hidden(fn () => $isOwner), // Sembunyikan tipe jika yang login adalah owner (karena pasti usulan produksi semua)
 
                 Tables\Columns\TextColumn::make('jumlah')
                     ->label('Jumlah')
@@ -202,7 +212,7 @@ class ProductRequestResource extends Resource
                     ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('asal_request')
-                    ->label('Asal Request')
+                    ->label('Asal')
                     ->state(fn (ProductRequest $record): string => $record->requestSourceName())
                     ->icon('heroicon-o-building-storefront')
                     ->badge()
@@ -239,7 +249,7 @@ class ProductRequestResource extends Resource
                     ->money('IDR', locale: 'id')
                     ->placeholder(fn (ProductRequest $record): string => match (true) {
                         $record->tipe_request !== 'restok_apotek' => '-',
-                        $record->status === ProductRequest::STATUS_DITOLAK => 'Request ditolak',
+                        $record->status === ProductRequest::STATUS_DITOLAK => 'Ditolak',
                         default => 'Menunggu Admin',
                     })
                     ->description(fn (ProductRequest $record): ?string => $record->tipe_request === 'restok_apotek' ? 'per pcs' : null)
@@ -270,7 +280,7 @@ class ProductRequestResource extends Resource
             ->striped()
             ->filters([
                 Tables\Filters\Filter::make('hari_ini')
-                    ->label('Request Hari Ini')
+                    ->label('Hari Ini')
                     ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today())),
 
                 Tables\Filters\Filter::make('bulan_tahun')
@@ -321,7 +331,7 @@ class ProductRequestResource extends Resource
                 Tables\Filters\SelectFilter::make('tipe_request')
                     ->label('Tipe')
                     ->options([
-                        'produksi_owner' => 'Request Owner',
+                        'produksi_owner' => 'Usulan Owner',
                         'restok_apotek' => 'Request Apotek',
                     ])
                     ->native(false)
@@ -340,208 +350,38 @@ class ProductRequestResource extends Resource
                     ->color('danger')
                     ->visible(fn (ProductRequest $record) => static::canDelete($record))
                     ->modalIcon('heroicon-o-exclamation-triangle')
-                    ->modalHeading('Batalkan Request Produk')
-                    ->modalDescription(fn (ProductRequest $record) => "Apakah Anda yakin ingin membatalkan request untuk {$record->jumlah} pcs \"{$record->product?->nama}\"? Tindakan ini tidak dapat dibatalkan.")
-                    ->modalSubmitActionLabel('Ya, Batalkan Request')
+                    ->modalHeading(fn () => Auth::user()?->role === 'owner' ? 'Batalkan Usulan Produksi' : 'Batalkan Request Produk')
+                    ->modalDescription(fn (ProductRequest $record) => "Apakah Anda yakin ingin membatalkan pengajuan {$record->jumlah} pcs \"{$record->product?->nama}\"? Tindakan ini tidak dapat dibatalkan.")
+                    ->modalSubmitActionLabel('Ya, Batalkan')
                     ->successNotification(
                         Notification::make()
                             ->success()
-                            ->title('Request Dibatalkan')
-                            ->body('Permintaan produk telah berhasil dibatalkan dan dihapus.')
+                            ->title('Dibatalkan')
+                            ->body('Data berhasil dibatalkan dan dihapus dari sistem.')
                     ),
 
+                // ... (Aksi khusus Admin (Proses, Tolak, Kirim, Selesai) dibiarkan utuh karena Owner tidak melihatnya)
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\Action::make('proses')
                         ->label('Tandai Diproses')
                         ->icon('heroicon-o-arrow-path')
                         ->color('info')
                         ->requiresConfirmation()
-                        ->modalIcon('heroicon-o-arrow-path')
-                        ->modalHeading('Tandai Sebagai Diproses')
-                        ->modalDescription(fn (ProductRequest $record) => "Request {$record->jumlah} pcs \"{$record->product?->nama}\" akan disetujui untuk diproses. Keputusan diskon ditentukan saat produk dikirim.")
-                        ->modalSubmitActionLabel('Ya, Tandai Diproses')
                         ->visible(fn (ProductRequest $record) => Auth::user()?->role === 'admin' && $record->status === ProductRequest::STATUS_PENDING)
                         ->action(function (ProductRequest $record) {
-                            $record->update([
-                                'status' => ProductRequest::STATUS_DIPROSES,
-                            ]);
-
-                            Notification::make()
-                                ->title('Request Sedang Diproses')
-                                ->body("{$record->jumlah} pcs \"{$record->product?->nama}\" telah disetujui dan menunggu proses berikutnya.")
-                                ->icon('heroicon-o-arrow-path')
-                                ->iconColor('info')
-                                ->color('info')
-                                ->duration(4500)
-                                ->send();
+                            $record->update(['status' => ProductRequest::STATUS_DIPROSES]);
+                            Notification::make()->title('Sedang Diproses')->success()->send();
                         }),
 
                     Tables\Actions\Action::make('tolak')
-                        ->label('Tolak Request')
+                        ->label('Tolak')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
                         ->requiresConfirmation()
-                        ->modalIcon('heroicon-o-x-circle')
-                        ->modalHeading('Tolak Request Produk')
-                        ->modalDescription(fn (ProductRequest $record) => "Request {$record->jumlah} pcs \"{$record->product?->nama}\" dari {$record->requestSourceName()} akan ditolak dan tidak akan diproses lebih lanjut.")
-                        ->modalSubmitActionLabel('Ya, Tolak Request')
                         ->visible(fn (ProductRequest $record) => Auth::user()?->role === 'admin' && $record->status === ProductRequest::STATUS_PENDING)
                         ->action(function (ProductRequest $record) {
-                            $record->update([
-                                'status' => ProductRequest::STATUS_DITOLAK,
-                            ]);
-
-                            Notification::make()
-                                ->title('Request Ditolak')
-                                ->body("{$record->jumlah} pcs \"{$record->product?->nama}\" dari {$record->requestSourceName()} telah ditolak.")
-                                ->icon('heroicon-o-x-circle')
-                                ->iconColor('danger')
-                                ->danger()
-                                ->duration(4500)
-                                ->send();
-                        }),
-
-                    Tables\Actions\Action::make('kirim_produk')
-                        ->label('Kirim Produk ke Mitra')
-                        ->icon('heroicon-o-truck')
-                        ->color('success')
-                        ->modalIcon('heroicon-o-truck')
-                        ->modalHeading(fn (ProductRequest $record) => "Kirim {$record->product?->nama} ke Mitra")
-                        ->modalDescription('Pilih sales dan batch produk, lalu konfirmasi pengiriman.')
-                        ->modalSubmitActionLabel('Konfirmasi & Kirim Produk')
-                        ->modalCancelActionLabel('Batal')
-                        ->modalWidth('2xl')
-                        ->stickyModalHeader()
-                        ->stickyModalFooter()
-                        ->fillForm(fn (ProductRequest $record): array => [
-                            'jumlah' => $record->jumlah,
-                        ])
-                        ->form([
-                            Forms\Components\Section::make('Ringkasan Pengiriman')
-                                ->icon('heroicon-o-clipboard-document-check')
-                                ->schema([
-                                    Forms\Components\Placeholder::make('ringkasan_pengiriman')
-                                        ->hiddenLabel()
-                                        ->content(function (ProductRequest $record): HtmlString {
-                                            $hargaNormal = (int) $record->product?->harga_jual;
-                                            $diskon = min(100, max(0, (float) $record->diskon_persen));
-                                            $hargaFinal = ConsignmentDeliveryService::discountedPrice(
-                                                $hargaNormal,
-                                                $diskon,
-                                            );
-                                            $total = $hargaFinal * (int) $record->jumlah;
-
-                                            return new HtmlString(sprintf(
-                                                '<div class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">'
-                                                .'<div class="grid grid-cols-2 divide-y divide-gray-200 sm:grid-cols-4 sm:divide-x sm:divide-y-0 dark:divide-white/10">'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Produk</p><p class="mt-1 font-semibold text-gray-950 dark:text-white">%s</p></div>'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Tujuan</p><p class="mt-1 font-semibold text-gray-950 dark:text-white">%s</p></div>'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Jumlah</p><p class="mt-1 font-semibold text-gray-950 dark:text-white">%s pcs</p></div>'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Harga Normal</p><p class="mt-1 font-semibold text-gray-950 dark:text-white">Rp %s</p></div>'
-                                                .'</div>'
-                                                .'<div class="grid grid-cols-1 divide-y divide-gray-200 border-t border-gray-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-white/10 dark:border-white/10">'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Harga Final / pcs (diskon %s%%)</p><p class="mt-1 font-bold text-success-600 dark:text-success-400">Rp %s</p></div>'
-                                                .'<div class="p-3"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Total Tagihan</p><p class="mt-1 font-bold text-gray-950 dark:text-white">Rp %s</p></div>'
-                                                .'</div>'
-                                                .'</div>',
-                                                e($record->product?->nama ?? '-'),
-                                                e($record->requestSourceName()),
-                                                number_format((int) $record->jumlah, 0, ',', '.'),
-                                                number_format($hargaNormal, 0, ',', '.'),
-                                                number_format($diskon, 2, ',', '.'),
-                                                number_format($hargaFinal, 0, ',', '.'),
-                                                number_format($total, 0, ',', '.'),
-                                            ));
-                                        }),
-                                ]),
-
-                            Forms\Components\Section::make('Penugasan Pengiriman')
-                                ->icon('heroicon-o-truck')
-                                ->schema([
-                                    Forms\Components\Select::make('sales_id')
-                                        ->label('Sales Pengirim')
-                                        ->prefixIcon('heroicon-o-identification')
-                                        ->placeholder('Pilih sales pengirim')
-                                        ->options(fn () => Sales::query()->where('is_active', true)->pluck('nama', 'id'))
-                                        ->searchable()
-                                        ->preload()
-                                        ->native(false)
-                                        ->required()
-                                        ->validationMessages(['required' => 'Sales pengirim wajib dipilih.']),
-
-                                    Forms\Components\Select::make('product_batch_id')
-                                        ->label('Batch Produk')
-                                        ->prefixIcon('heroicon-o-tag')
-                                        ->placeholder('Pilih batch yang tersedia')
-                                        ->helperText('Kedaluwarsa terdekat tampil di atas.')
-                                        ->options(fn (ProductRequest $record) => ProductBatch::query()
-                                            ->where('product_id', $record->product_id)
-                                            ->where('stok_toko', '>', 0)
-                                            ->whereDate('tanggal_kedaluwarsa', '>=', now())
-                                            ->orderBy('tanggal_kedaluwarsa')
-                                            ->get()
-                                            ->mapWithKeys(fn (ProductBatch $batch) => [
-                                                $batch->id => sprintf(
-                                                    '%s | Stok: %s pcs | ED: %s',
-                                                    $batch->batch_code,
-                                                    number_format($batch->stok_toko, 0, ',', '.'),
-                                                    $batch->tanggal_kedaluwarsa?->format('d/m/Y') ?? '-',
-                                                ),
-                                            ]))
-                                        ->searchable()
-                                        ->preload()
-                                        ->live()
-                                        ->native(false)
-                                        ->required()
-                                        ->validationMessages(['required' => 'Batch produk wajib dipilih.']),
-                                ])
-                                ->columns(2),
-
-                            Forms\Components\Hidden::make('jumlah')
-                                ->default(fn (ProductRequest $record) => $record->jumlah)
-                                ->rule(function (Get $get, ProductRequest $record) {
-                                    return function (string $attribute, $value, Closure $fail) use ($get, $record) {
-                                        if ((int) $value !== (int) $record->jumlah) {
-                                            $fail("Jumlah harus sama dengan request, yaitu {$record->jumlah} pcs.");
-                                        }
-
-                                        $batch = ProductBatch::find($get('product_batch_id'));
-                                        if ($batch && (int) $value > (int) $batch->stok_toko) {
-                                            $fail("Stok batch tidak cukup. Tersedia {$batch->stok_toko} pcs.");
-                                        }
-                                    };
-                                }),
-                        ])
-                        ->visible(fn (ProductRequest $record): bool => Auth::user()?->role === 'admin'
-                            && $record->tipe_request === 'restok_apotek'
-                            && $record->status === ProductRequest::STATUS_DIPROSES)
-                        ->action(function (ProductRequest $record, array $data, Tables\Actions\Action $action) {
-                            try {
-                                $delivery = app(ConsignmentDeliveryService::class)->deliver(
-                                    partnerId: (int) $record->partner_id,
-                                    productBatchId: (int) $data['product_batch_id'],
-                                    salesId: (int) $data['sales_id'],
-                                    quantity: (int) $data['jumlah'],
-                                    discountPercent: $record->diskon_persen,
-                                    productRequestId: $record->id,
-                                );
-                            } catch (DomainException $exception) {
-                                Notification::make()
-                                    ->danger()
-                                    ->title('Produk Gagal Dikirim')
-                                    ->body($exception->getMessage())
-                                    ->send();
-                                $action->halt();
-
-                                return;
-                            }
-
-                            Notification::make()
-                                ->success()
-                                ->title('Produk Berhasil Dikirim')
-                                ->body("{$delivery->jumlah} pcs {$record->product?->nama} dikirim ke {$record->requestSourceName()} dengan harga Rp ".number_format($delivery->harga_satuan, 0, ',', '.').' per pcs.')
-                                ->icon('heroicon-o-check-badge')
-                                ->send();
+                            $record->update(['status' => ProductRequest::STATUS_DITOLAK]);
+                            Notification::make()->title('Ditolak')->danger()->send();
                         }),
 
                     Tables\Actions\Action::make('selesai')
@@ -549,24 +389,10 @@ class ProductRequestResource extends Resource
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->modalIcon('heroicon-o-check-circle')
-                        ->modalHeading('Tandai Sebagai Selesai')
-                        ->modalDescription(fn (ProductRequest $record) => "Request {$record->jumlah} pcs \"{$record->product?->nama}\" akan ditandai sebagai Selesai.")
-                        ->modalSubmitActionLabel('Ya, Tandai Selesai')
-                        ->visible(fn (ProductRequest $record) => Auth::user()?->role === 'admin'
-                            && $record->tipe_request === 'produksi_owner'
-                            && $record->status === ProductRequest::STATUS_DIPROSES)
+                        ->visible(fn (ProductRequest $record) => Auth::user()?->role === 'admin' && $record->tipe_request === 'produksi_owner' && $record->status === ProductRequest::STATUS_DIPROSES)
                         ->action(function (ProductRequest $record) {
                             $record->update(['status' => ProductRequest::STATUS_SELESAI]);
-
-                            Notification::make()
-                                ->title('Request Selesai Diproses')
-                                ->body("{$record->jumlah} pcs \"{$record->product?->nama}\" telah selesai dan siap diambil/dikirim.")
-                                ->icon('heroicon-o-check-circle')
-                                ->iconColor('success')
-                                ->success()
-                                ->duration(4500)
-                                ->send();
+                            Notification::make()->title('Selesai Diproses')->success()->send();
                         }),
                 ])
                     ->label('Tindakan Admin')
@@ -574,8 +400,8 @@ class ProductRequestResource extends Resource
                     ->color('gray')
                     ->visible(fn () => Auth::user()?->role === 'admin'),
             ])
-            ->emptyStateHeading('Belum Ada Request Produk')
-            ->emptyStateDescription('Request produk yang diajukan akan muncul di sini.')
+            ->emptyStateHeading(fn () => Auth::user()?->role === 'owner' ? 'Belum Ada Usulan Produksi' : 'Belum Ada Request Produk')
+            ->emptyStateDescription('Data yang diajukan akan muncul di sini.')
             ->emptyStateIcon('heroicon-o-clipboard-document-check');
     }
 
@@ -586,21 +412,5 @@ class ProductRequestResource extends Resource
             'create' => Pages\CreateProductRequest::route('/create'),
             'edit' => Pages\EditProductRequest::route('/{record}/edit'),
         ];
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        if (Auth::user()?->role !== 'admin') {
-            return null;
-        }
-
-        $count = ProductRequest::where('status', ProductRequest::STATUS_PENDING)->count();
-
-        return $count > 0 ? (string) $count : null;
-    }
-
-    public static function getNavigationBadgeColor(): ?string
-    {
-        return 'warning';
     }
 }

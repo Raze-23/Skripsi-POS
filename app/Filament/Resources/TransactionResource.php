@@ -87,7 +87,8 @@ class TransactionResource extends Resource
             ->filters([
                 Filter::make('hari_ini')
                     ->label('Transaksi Hari Ini')
-                    ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today())),
+                    ->query(fn (Builder $query) => $query->whereDate('created_at', Carbon::today()))
+                    ->default(),
                 SelectFilter::make('produk_id')
                     ->label('Produk yang Dibeli')
                     ->options(fn() => Product::pluck('nama', 'id')->toArray())
