@@ -24,6 +24,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class ProductResource extends Resource
 {
@@ -57,17 +58,21 @@ class ProductResource extends Resource
                                                 'required' => 'Nama produk wajib diisi.',
                                                 'unique' => 'Nama produk ini sudah terdaftar!',
                                             ]),
+                                        Forms\Components\Textarea::make('deskripsi')
+                                            ->label('Deskripsi Produk')
+                                            ->maxLength(1000)
+                                            ->rows(3),
                                         Forms\Components\TextInput::make('estimasi_masak')
-                                        ->label('Estimasi Waktu Pembuatan')
-                                        ->numeric()
-                                        ->rule('required')
-                                        ->markAsRequired()
-                                        ->suffix('Menit')
-                                        ->minValue(1)
-                                        ->validationMessages([
-                                            'required' => 'Estimasi waktu pembuatan wajib diisi.',
-                                            'min' => 'Estimasi waktu tidak boleh 0!',
-                                        ]),
+                                            ->label('Estimasi Waktu Pembuatan')
+                                            ->numeric()
+                                            ->rule('required')
+                                            ->markAsRequired()
+                                            ->suffix('Menit')
+                                            ->minValue(1)
+                                            ->validationMessages([
+                                                'required' => 'Estimasi waktu pembuatan wajib diisi.',
+                                                'min' => 'Estimasi waktu tidak boleh 0!',
+                                            ]),
                                         Forms\Components\Toggle::make('is_discontinued')
                                             ->label('Telah Berhenti Produksi')
                                             ->helperText('Tandai jika produk ini sudah tidak diproduksi lagi.')
@@ -123,7 +128,7 @@ class ProductResource extends Resource
                                     };
                                 }),
                         ])
-                            ->columns(2),
+                        ->columns(2),
                 ])
                     ->skippable(false)
                     ->columnSpanFull(),
@@ -143,7 +148,9 @@ class ProductResource extends Resource
                     ]),
                 Tables\Columns\TextColumn::make('nama')
                     ->searchable()
-                    ->description(fn ($record) => $record->is_discontinued ? 'Telah Berhenti Produksi' : null)
+                    ->description(fn ($record) => $record->is_discontinued
+                        ? 'Telah Berhenti Produksi'
+                        : (filled($record->deskripsi) ? Str::limit($record->deskripsi, 50) : null))
                     ->color(fn ($record) => $record->is_discontinued ? 'danger' : 'default')
                     ->weight(fn ($record) => $record->is_discontinued ? 'bold' : 'default'),
                 Tables\Columns\TextColumn::make('estimasi_masak')
@@ -166,6 +173,7 @@ class ProductResource extends Resource
                             return 'gray';
                         }
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
+
                         return match (true) {
                             $daysLeft < 7 => 'danger',
                             $daysLeft < 30 => 'warning',
@@ -178,6 +186,7 @@ class ProductResource extends Resource
                             return 'heroicon-o-minus';
                         }
                         $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($state)->startOfDay(), false);
+
                         return match (true) {
                             $daysLeft < 7 => 'heroicon-o-x-circle',
                             $daysLeft < 30 => 'heroicon-o-exclamation-triangle',

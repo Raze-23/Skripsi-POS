@@ -1,29 +1,28 @@
 <?php
 
-namespace App\Filament\Resources\ProductRequestResource\Pages;
+namespace App\Filament\Resources\OwnerProductRequestResource\Pages;
 
-use App\Filament\Resources\ProductRequestResource;
+use App\Filament\Resources\OwnerProductRequestResource;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Support\Facades\Auth;
 
-class EditProductRequest extends EditRecord
+class EditOwnerProductRequest extends EditRecord
 {
-    protected static string $resource = ProductRequestResource::class;
+    protected static string $resource = OwnerProductRequestResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
             Actions\DeleteAction::make()
-                ->label(fn () => Auth::user()?->role === 'owner' ? 'Batalkan Usulan' : 'Batalkan Request')
+                ->label('Batalkan Usulan')
                 ->icon('heroicon-o-trash')
                 ->color('danger')
                 ->successNotification(
                     Notification::make()
                         ->success()
                         ->title('Dibatalkan')
-                        ->body('Data berhasil dihapus/dibatalkan.')
+                        ->body('Usulan produksi berhasil dihapus/dibatalkan.')
                 ),
         ];
     }
@@ -38,6 +37,6 @@ class EditProductRequest extends EditRecord
         return Notification::make()
             ->success()
             ->title('Perubahan Tersimpan!')
-            ->body('Data berhasil diperbarui.');
+            ->body('Usulan produksi berhasil diperbarui.');
     }
 }

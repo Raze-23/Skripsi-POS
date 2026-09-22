@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Mitra\Resources\ConsignmentReturnResource\Pages\ManageConsignmentReturns;
 use App\Filament\Mitra\Resources\ProductRequestResource\Pages\CreateProductRequest as CreateMitraProductRequest;
-use App\Filament\Resources\ProductRequestResource\Pages\CreateProductRequest as CreateOwnerProductRequest;
+use App\Filament\Resources\OwnerProductRequestResource\Pages\CreateOwnerProductRequest;
 use App\Filament\Resources\ProductRequestResource\Pages\ListProductRequests;
 use App\Models\ConsignmentReturn;
 use App\Models\ConsignmentStock;
@@ -226,7 +226,6 @@ class ConsignmentDiscountWorkflowTest extends TestCase
         Livewire::test(CreateOwnerProductRequest::class)
             ->set('selectedProductId', $product->id)
             ->set('jumlah', 5)
-            ->set('diskonPersen', '80')
             ->call('submit')
             ->assertHasNoErrors();
 

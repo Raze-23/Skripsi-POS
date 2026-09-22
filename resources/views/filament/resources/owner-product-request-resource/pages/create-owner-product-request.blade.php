@@ -1,12 +1,7 @@
-@php
-    $isMitra = auth()->user()?->role === 'mitra';
-    $resource = $this->getResource();
-@endphp
-
 <x-filament-panels::page>
     @include('filament.resources.product-request-resource.pages.partials.styles')
 
-    <div class="pr-shell {{ $isMitra ? 'pr-theme-mitra' : 'pr-theme-owner' }}">
+    <div class="pr-shell pr-theme-owner">
         <section class="pr-catalog" aria-labelledby="product-catalog-title">
             <div class="pr-catalog-header">
                 <div>
@@ -54,6 +49,7 @@
                                 src="{{ $product->foto ? asset('storage/' . $product->foto) : asset('images/notfound.png') }}"
                                 alt="{{ $product->nama }}"
                                 loading="lazy"
+                                class="{{ $product->is_discontinued ? 'is-discontinued' : '' }}"
                             />
 
                             @if ($isSelected)
@@ -65,7 +61,6 @@
 
                         <span class="pr-card-content">
                             <span class="pr-card-name" title="{{ $product->nama }}">{{ $product->nama }}</span>
-                            <span class="pr-card-price">Rp {{ number_format($product->harga_jual, 0, ',', '.') }}</span>
                         </span>
                     </button>
                 @empty
@@ -87,8 +82,8 @@
                         <x-filament::icon icon="heroicon-o-clipboard-document-list" />
                     </span>
                     <div>
-                        <h2 id="request-summary-title" class="pr-section-title">Detail Request</h2>
-                        <p class="pr-section-meta">{{ $isMitra ? 'Restok apotek' : 'Produksi owner' }}</p>
+                        <h2 id="request-summary-title" class="pr-section-title">Detail Usulan</h2>
+                        <p class="pr-section-meta">Produksi owner</p>
                     </div>
                 </header>
 
@@ -101,7 +96,28 @@
                             />
                             <div>
                                 <strong title="{{ $this->selectedProduct->nama }}">{{ $this->selectedProduct->nama }}</strong>
-                                <span>Rp {{ number_format($this->selectedProduct->harga_jual, 0, ',', '.') }}</span>
+                                <span>{{ $this->selectedProduct->estimasi_masak ?: '-' }} menit / produksi</span>
+                            </div>
+                        </div>
+
+                        <div class="pr-production-insights" aria-label="Acuan jumlah produksi">
+                            <div class="pr-production-insight-grid">
+                                <div>
+                                    <span title="Total stok dari batch yang belum kedaluwarsa">Stok Attiin</span>
+                                    <strong>{{ number_format($this->selectedProduct->stok_attiin, 0, ',', '.') }} pcs</strong>
+                                </div>
+                                <div>
+                                    <span>Terjual bulan ini</span>
+                                    <strong>{{ number_format($this->selectedProduct->terjual_bulan_ini, 0, ',', '.') }} pcs</strong>
+                                </div>
+                                <div>
+                                    <span title="Request mitra berstatus menunggu keputusan atau diproses">Kebutuhan mitra</span>
+                                    <strong>{{ number_format($this->selectedProduct->kebutuhan_mitra_aktif, 0, ',', '.') }} pcs</strong>
+                                </div>
+                                <div @class(['is-warning' => $this->selectedProduct->stok_mendekati_kedaluwarsa > 0])>
+                                    <span title="Stok batch yang akan kedaluwarsa dalam 30 hari">ED ≤ 30 hari</span>
+                                    <strong>{{ number_format($this->selectedProduct->stok_mendekati_kedaluwarsa, 0, ',', '.') }} pcs</strong>
+                                </div>
                             </div>
                         </div>
                     @else
@@ -119,7 +135,7 @@
                     @enderror
 
                     <div class="pr-quantity-field">
-                        <label for="request-quantity">Jumlah request</label>
+                        <label for="request-quantity">Jumlah target produksi</label>
                         <div class="pr-quantity-control">
                             <button
                                 type="button"
@@ -156,34 +172,6 @@
                             <p class="pr-error" role="alert">{{ $message }}</p>
                         @enderror
                     </div>
-
-                    @if ($isMitra)
-                        <div class="pr-discount-field">
-                            <label for="request-discount">Permintaan diskon</label>
-                            <div class="pr-discount-control">
-                                <span class="pr-discount-icon" aria-hidden="true">
-                                    <x-filament::icon icon="heroicon-o-receipt-percent" />
-                                </span>
-                                <input
-                                    id="request-discount"
-                                    type="number"
-                                    wire:model.live.debounce.250ms="diskonPersen"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    inputmode="decimal"
-                                    placeholder="0"
-                                    @disabled(! $selectedProductId)
-                                />
-                                <span class="pr-discount-unit">%</span>
-                            </div>
-                            <p class="pr-field-help">Isi 0 jika tidak mengajukan diskon. Nilai ini menjadi harga acuan saat Admin mengirim produk.</p>
-
-                            @error('diskonPersen')
-                                <p class="pr-error" role="alert">{{ $message }}</p>
-                            @enderror
-                        </div>
-                    @endif
                 </div>
 
                 <footer class="pr-summary-actions">
@@ -200,11 +188,11 @@
                         <span wire:loading wire:target="submit">
                             <x-filament::loading-indicator />
                         </span>
-                        <span wire:loading.remove wire:target="submit">Kirim Request</span>
+                        <span wire:loading.remove wire:target="submit">Kirim Usulan</span>
                         <span wire:loading wire:target="submit">Mengirim...</span>
                     </button>
 
-                    <a href="{{ $resource::getUrl('index') }}" wire:navigate class="pr-cancel">Batal</a>
+                    <a href="{{ $this->getResource()::getUrl('index') }}" wire:navigate class="pr-cancel">Batal</a>
                 </footer>
             </form>
         </aside>
