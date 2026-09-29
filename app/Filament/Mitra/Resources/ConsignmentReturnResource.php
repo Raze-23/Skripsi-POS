@@ -6,8 +6,11 @@ use App\Filament\Mitra\Resources\ConsignmentReturnResource\Pages;
 use App\Models\ConsignmentReturn;
 use App\Models\ConsignmentStock;
 use App\Models\ProductDisposal;
+use App\Models\PaymentAccount;
+use App\Services\ConsignmentReturnPaymentService;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -17,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 
 class ConsignmentReturnResource extends Resource
 {
@@ -96,11 +100,13 @@ class ConsignmentReturnResource extends Resource
                     ->badge()
                     ->color(fn (string $state) => match ($state) {
                         'menunggu_konfirmasi' => 'warning',
+                        'menunggu_validasi' => 'info',
                         'selesai' => 'success',
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state) => match ($state) {
                         'menunggu_konfirmasi' => 'Menunggu Konfirmasi',
+                        'menunggu_validasi' => 'Menunggu Validasi Pembayaran',
                         'selesai' => 'Selesai',
                         default => $state,
                     }),
@@ -138,9 +144,16 @@ class ConsignmentReturnResource extends Resource
                     ->description('per pcs'),
 
                 Tables\Columns\TextColumn::make('omzet_terbentuk')
-                    ->label('Omzet')
+                    ->label('Tagihan')
                     ->money('IDR', locale: 'id')
                     ->weight('bold'),
+                Tables\Columns\TextColumn::make('metode_pembayaran')
+                    ->label('Pembayaran')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'transfer_bank' => 'Transfer Bank', 'tunai_sales' => 'Tunai ke Sales', default => '-',
+                    }),
+                Tables\Columns\TextColumn::make('catatan_penolakan')
+                    ->label('Catatan Admin')->wrap()->placeholder('-'),
             ])
             ->filters([
                 Tables\Filters\Filter::make('hari_ini')
@@ -191,11 +204,20 @@ class ConsignmentReturnResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'menunggu_konfirmasi' => 'Menunggu Konfirmasi',
+                        'menunggu_validasi' => 'Menunggu Validasi Pembayaran',
                         'selesai' => 'Selesai',
                     ])
                     ->native(false),
             ])
             ->actions([
+                Tables\Actions\Action::make('lihat_pembayaran')
+                    ->label('Lihat Pembayaran')->icon('heroicon-o-eye')->color('info')
+                    ->visible(fn (ConsignmentReturn $record) => $record->status !== 'menunggu_konfirmasi' && $record->terjual > 0)
+                    ->modalHeading('Rincian Pembayaran')
+                    ->modalWidth('4xl')
+                    ->modalContent(fn (ConsignmentReturn $record) => view('filament.consignment-payment-review', ['record' => $record]))
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalSubmitAction(false),
                 Tables\Actions\Action::make('isi_rincian')
                     ->label('Isi Rincian')
                     ->icon('heroicon-o-pencil-square')
@@ -203,112 +225,29 @@ class ConsignmentReturnResource extends Resource
                     ->visible(fn (ConsignmentReturn $record) => $record->status === 'menunggu_konfirmasi' && Auth::user()?->role === 'mitra'
                     )
                     ->modalHeading(fn (ConsignmentReturn $record) => "Konfirmasi Rincian: {$record->productBatch->product->nama}")
+                    ->modalWidth('5xl')
                     ->modalDescription(function (ConsignmentReturn $record) {
                         $stok = ConsignmentStock::where('partner_id', $record->partner_id)
                             ->where('product_batch_id', $record->product_batch_id)
                             ->first();
                         $jumlah = $stok?->stok_titipan ?? 0;
 
-                        return "Total rincian di bawah wajib berjumlah tepat {$jumlah} pcs (sesuai stok titipan saat ini).";
+                        return "Batch {$record->productBatch->batch_code}. Stok titipan {$jumlah} pcs. Jumlah rincian harus sesuai dengan stok titipan.";
                     })
-                    ->modalSubmitActionLabel('Konfirmasi & Selesaikan')
-                    ->form([
-                        Forms\Components\Grid::make(3)
-                            ->schema([
-                                Forms\Components\TextInput::make('terjual')
-                                    ->label('Terjual (Laku)')
-                                    ->prefixIcon('heroicon-o-currency-dollar')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->required()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->helperText('Uang masuk.'),
-
-                                Forms\Components\TextInput::make('qty_layak')
-                                    ->label('Sisa Layak Jual')
-                                    ->prefixIcon('heroicon-o-arrow-path')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->required()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->helperText('Kembali ke rak toko.'),
-
-                                Forms\Components\TextInput::make('qty_rusak')
-                                    ->label('Barang Rusak')
-                                    ->prefixIcon('heroicon-o-archive-box-x-mark')
-                                    ->suffix('pcs')
-                                    ->numeric()
-                                    ->required()
-                                    ->rule('min:0')
-                                    ->default(0)
-                                    ->helperText('Dibuang & catat rugi.'),
-                            ]),
-                    ])
-                    ->action(function (ConsignmentReturn $record, array $data, Tables\Actions\Action $action) {
-                        $terjual = (int) ($data['terjual'] ?? 0);
-                        $layak = (int) ($data['qty_layak'] ?? 0);
-                        $rusak = (int) ($data['qty_rusak'] ?? 0);
-                        $total = $terjual + $layak + $rusak;
-
-                        $stok = ConsignmentStock::where('partner_id', $record->partner_id)
-                            ->where('product_batch_id', $record->product_batch_id)
-                            ->first();
-
-                        if (! $stok || $total !== $stok->stok_titipan) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Jumlah Tidak Pas!')
-                                ->body("Total rincian ({$total} pcs) harus persis dengan stok titipan (".($stok?->stok_titipan ?? 0).' pcs).')
-                                ->send();
-                            $action->halt();
-                        }
-
-                        DB::transaction(function () use ($record, $terjual, $layak, $rusak, $stok) {
-                            $unitPrice = $record->resolvedUnitPrice($stok);
-                            $omzet = $record->calculateRevenue($terjual, $stok);
-
-                            $record->update([
-                                'terjual' => $terjual,
-                                'qty_layak' => $layak,
-                                'qty_rusak' => $rusak,
-                                'diskon_persen' => $stok->diskon_persen ?? $record->diskon_persen,
-                                'harga_satuan' => $unitPrice,
-                                'omzet_terbentuk' => $omzet,
-                                'status' => 'selesai',
-                            ]);
-
-                            if ($layak > 0) {
-                                $record->productBatch->increment('stok_toko', $layak);
-                            }
-
-                            if ($rusak > 0) {
-                                ProductDisposal::create([
-                                    'product_batch_id' => $record->product_batch_id,
-                                    'jumlah' => $rusak,
-                                    'alasan' => 'Barang Rusak',
-                                    'sumber' => 'Apotek',
-                                    'consignment_return_id' => $record->id,
-                                ]);
-                            }
-
-                            $stok->delete();
-                        });
-
-                        Notification::make()
-                            ->success()
-                            ->title('Konfirmasi Berhasil!')
-                            ->body("Rincian penarikan {$record->productBatch->product->nama} telah dikonfirmasi (Laku: {$terjual}, Layak: {$layak}, Rusak: {$rusak}).")
-                            ->icon('heroicon-o-check-circle')
+                    ->modalSubmitActionLabel('Kirim Rincian & Pembayaran')
+                    ->modalCancelActionLabel('Kembali')
+                    ->form(static::returnDetailsForm())
+                    ->action(function (ConsignmentReturn $record, array $data) {
+                        app(ConsignmentReturnPaymentService::class)->submit($record, Auth::user(), $data);
+                        Notification::make()->success()->title('Rincian Terkirim')
+                            ->body((int) $data['terjual'] > 0 ? 'Pembayaran menunggu validasi Admin.' : 'Retur tanpa penjualan telah selesai.')
                             ->send();
                     }),
-
                 Tables\Actions\Action::make('koreksi')
                     ->label('Koreksi')
                     ->icon('heroicon-o-pencil-square')
                     ->color('gray')
-                    ->visible(fn (ConsignmentReturn $record) => $record->status === 'selesai' && Auth::user()?->role === 'mitra')
+                    ->visible(fn (ConsignmentReturn $record) => false)
                     ->modalHeading(fn (ConsignmentReturn $record) => "Koreksi Rincian: {$record->productBatch->product->nama}")
                     ->modalDescription(function (ConsignmentReturn $record) {
                         $totalAwal = $record->terjual + $record->qty_layak + $record->qty_rusak;
@@ -403,6 +342,142 @@ class ConsignmentReturnResource extends Resource
                             ->send();
                     }),
             ]);
+    }
+
+    private static function returnDetailsForm(): array
+    {
+        $isTransfer = fn (Get $get): bool => $get('metode_pembayaran') === 'transfer_bank';
+
+        return [
+            Forms\Components\Section::make('Rincian Barang')
+                ->description('Pisahkan seluruh stok titipan menjadi terjual, layak jual, dan rusak.')
+                ->icon('heroicon-o-cube')
+                ->schema([
+                    Forms\Components\Grid::make(['default' => 1, 'md' => 3])->schema([
+                        Forms\Components\TextInput::make('terjual')
+                            ->label('Terjual')
+                            ->suffix('pcs')
+                            ->numeric()->required()->minValue(0)->default(0)
+                            ->live(onBlur: true)
+                            ->helperText('Jumlah yang harus dibayar.'),
+                        Forms\Components\TextInput::make('qty_layak')
+                            ->label('Sisa Layak Jual')
+                            ->suffix('pcs')
+                            ->numeric()->required()->minValue(0)->default(0)
+                            ->live(onBlur: true)
+                            ->helperText('Dikembalikan ke gudang.'),
+                        Forms\Components\TextInput::make('qty_rusak')
+                            ->label('Barang Rusak')
+                            ->suffix('pcs')
+                            ->numeric()->required()->minValue(0)->default(0)
+                            ->live(onBlur: true)
+                            ->helperText('Dicatat sebagai barang rusak.'),
+                    ]),
+                    Forms\Components\Grid::make(['default' => 1, 'md' => 2])->schema([
+                        Forms\Components\Placeholder::make('jumlah_dialokasikan')
+                            ->label('Total Rincian')
+                            ->content(function (Get $get, ConsignmentReturn $record): HtmlString {
+                                $allocated = (int) $get('terjual') + (int) $get('qty_layak') + (int) $get('qty_rusak');
+                                $stock = (int) ConsignmentStock::where('partner_id', $record->partner_id)
+                                    ->where('product_batch_id', $record->product_batch_id)->value('stok_titipan');
+                                $color = $allocated === $stock ? '#047857' : '#b45309';
+                                return new HtmlString('<div style="padding:14px 16px;border:1px solid #dce5e2;border-radius:12px;background:#f8faf9">'
+                                    .'<strong style="font-size:20px;color:'.$color.'">'.$allocated.' / '.$stock.' pcs</strong>'
+                                    .'<div style="color:#64748b;margin-top:3px;font-size:12px">Total harus sama dengan stok titipan.</div></div>');
+                            }),
+                        Forms\Components\Placeholder::make('total_tagihan')
+                            ->label('Total Tagihan')
+                            ->content(function (Get $get, ConsignmentReturn $record): HtmlString {
+                                $sold = (int) $get('terjual');
+                                $price = $record->resolvedUnitPrice();
+                                $amount = $record->calculateRevenue($sold);
+                                return new HtmlString('<div style="padding:14px 16px;border:1px solid #bbddd0;border-radius:12px;background:#ecfdf5">'
+                                    .'<strong style="font-size:20px;color:#065f46">Rp '.number_format($amount, 0, ',', '.').'</strong>'
+                                    .'<div style="color:#475569;margin-top:3px;font-size:12px">'.$sold.' pcs × Rp '.number_format($price, 0, ',', '.').' per pcs</div></div>');
+                            }),
+                    ]),
+                ]),
+
+            Forms\Components\Section::make('Pembayaran')
+                ->description('Pilih cara pembayaran untuk barang yang terjual.')
+                ->icon('heroicon-o-banknotes')
+                ->visible(fn (Get $get): bool => (int) $get('terjual') > 0)
+                ->schema([
+                    Forms\Components\Select::make('metode_pembayaran')
+                        ->label('Metode Pembayaran')
+                        ->options(fn () => PaymentAccount::where('is_active', true)->exists()
+                            ? ['tunai_sales' => 'Titip Tunai ke Sales', 'transfer_bank' => 'Transfer Bank']
+                            : ['tunai_sales' => 'Titip Tunai ke Sales'])
+                        ->required(fn (Get $get): bool => (int) $get('terjual') > 0)
+                        ->live()->native(false),
+                    Forms\Components\Placeholder::make('info_tunai')
+                        ->label('Penyerahan Tunai')
+                        ->content(fn (Get $get, ConsignmentReturn $record): string => 'Titip Rp '.number_format($record->calculateRevenue((int) $get('terjual')), 0, ',', '.')
+                            .' kepada Sales '.($record->sales?->nama ?? 'penarik').'. Admin akan memvalidasi setoran sebelum retur selesai.')
+                        ->visible(fn (Get $get): bool => $get('metode_pembayaran') === 'tunai_sales'),
+                ]),
+
+            Forms\Components\Section::make('Detail Transfer')
+                ->description('Pilih rekening tujuan dan unggah bukti pembayaran.')
+                ->icon('heroicon-o-arrow-up-tray')
+                ->visible($isTransfer)
+                ->columns(['default' => 1, 'md' => 2])
+                ->schema([
+                    Forms\Components\Select::make('payment_account_id')
+                        ->label('Rekening Tujuan')
+                        ->options(fn () => PaymentAccount::where('is_active', true)->get()
+                            ->mapWithKeys(fn (PaymentAccount $account) => [
+                                $account->id => $account->bank.' ('.$account->account_name.')',
+                            ]))
+                        ->default(fn (): ?int => PaymentAccount::where('is_active', true)->count() === 1
+                            ? PaymentAccount::where('is_active', true)->value('id')
+                            : null)
+                        ->required($isTransfer)
+                        ->live()
+                        ->native(false)
+                        ->hidden(fn (): bool => PaymentAccount::where('is_active', true)->count() === 1)
+                        ->dehydratedWhenHidden()
+                        ->columnSpanFull(),
+                    Forms\Components\Placeholder::make('detail_rekening_tujuan')
+                        ->label('Nomor Rekening Tujuan')
+                        ->visible(fn (Get $get): bool => filled($get('payment_account_id')))
+                        ->content(function (Get $get): HtmlString {
+                            $account = PaymentAccount::where('is_active', true)->find($get('payment_account_id'));
+                            if (! $account) {
+                                return new HtmlString('Pilih rekening tujuan yang aktif.');
+                            }
+
+                            return new HtmlString('<div style="padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">'
+                                .'<div style="color:#475569;font-size:13px;font-weight:600">'.e($account->bank).'</div>'
+                                .'<div style="margin-top:4px;color:#172c27;font-size:18px;font-weight:700;overflow-wrap:anywhere;user-select:text">'.e($account->account_number).'</div>'
+                                .'<div style="margin-top:4px;color:#475569;font-size:13px">Atas nama '.e($account->account_name).'</div>'
+                                .'</div>');
+                        })
+                        ->columnSpanFull(),
+                    Forms\Components\TextInput::make('nama_pengirim')
+                        ->label('Nama Pemilik Rekening Pengirim')
+                        ->required($isTransfer)->maxLength(255),
+                    Forms\Components\TextInput::make('bank_pengirim')
+                        ->label('Bank Pengirim')
+                        ->required($isTransfer)->maxLength(255),
+                    Forms\Components\DateTimePicker::make('dibayar_pada')
+                        ->label('Waktu Transfer')
+                        ->required($isTransfer)->maxDate(now()),
+                    Forms\Components\TextInput::make('referensi_transfer')
+                        ->label('Nomor Referensi (opsional)')
+                        ->maxLength(255),
+                    Forms\Components\FileUpload::make('bukti_pembayaran')
+                        ->label('Foto Bukti Transfer')
+                        ->disk('local')
+                        ->directory(fn (ConsignmentReturn $record): string => 'bukti-pembayaran-retur/'.$record->id)
+                        ->image()
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                        ->maxSize(5120)
+                        ->required($isTransfer)
+                        ->helperText('JPG, PNG, atau WebP. Maksimal 5 MB. Bukti hanya dapat dilihat oleh Anda dan Admin.')
+                        ->columnSpanFull(),
+                ]),
+        ];
     }
 
     public static function getPages(): array

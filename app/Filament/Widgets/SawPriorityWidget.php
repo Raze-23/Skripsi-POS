@@ -37,14 +37,18 @@ class SawPriorityWidget extends Widget
         return in_array(Auth::user()?->role, ['admin', 'owner']);
     }
 
-    public function getRankedProducts(): array
+    public function getWidgetData(): array
     {
         $year = $this->resolveYear();
 
         $products = Product::all();
 
         if ($products->isEmpty()) {
-            return [];
+            return [
+                'darurat' => [],
+                'ranked' => [],
+                'aman_count' => 0,
+            ];
         }
 
         // ── C1: Volume Penjualan (Benefit) — difilter sesuai $year ─────────────
@@ -64,7 +68,7 @@ class SawPriorityWidget extends Widget
         // Source B: ConsignmentReturn column terjual, status = 'selesai'
         $consignmentSales = DB::table('consignment_returns')
             ->join('product_batches', 'product_batches.id', '=', 'consignment_returns.product_batch_id')
-            ->whereYear('consignment_returns.created_at', $year)
+            ->whereYear(DB::raw('COALESCE(consignment_returns.divalidasi_pada, consignment_returns.created_at)'), $year)
             ->where('consignment_returns.status', 'selesai')
             ->select(
                 'product_batches.product_id',
@@ -117,11 +121,30 @@ class SawPriorityWidget extends Widget
 
         // ── Step 1: Build raw data matrix ───────────────────────────────────────
         $rawData = [];
+        $daruratData = [];
+        $amanCount = 0;
         $hariIni = now()->startOfDay();
 
         foreach ($products as $product) {
             $id = $product->id;
+            $stok = (int) ($totalStok[$id] ?? 0);
 
+            // Klasifikasi berdasarkan batas aman
+            if ($stok === 0) {
+                // Darurat: Wajib restok (Bypass SAW)
+                $daruratData[] = [
+                    'id' => $id,
+                    'nama' => $product->nama,
+                    'stok_raw' => 0,
+                ];
+                continue;
+            } elseif ($stok > 10) {
+                // Aman: Tidak perlu dianalisis
+                $amanCount++;
+                continue;
+            }
+
+            // Stok 1 - 10: Masuk analisis SAW
             $c1 = (float) (($kasirSales[$id] ?? 0) + ($consignmentSales[$id] ?? 0));
 
             if (isset($nearestExpiry[$id])) {
@@ -134,7 +157,7 @@ class SawPriorityWidget extends Widget
                 $c2 = self::NO_BATCH_EXPIRY_DAYS;
             }
 
-            $c3 = max(1, (float) ($totalStok[$id] ?? 0));
+            $c3 = max(1, (float) $stok);
             $c4 = (float) ($reqMitra[$id] ?? 0);
             $c5 = (float) ($reqOwner[$id] ?? 0);
 
@@ -147,12 +170,16 @@ class SawPriorityWidget extends Widget
                 'c4' => $c4,
                 'c5' => $c5,
                 'expiry_raw' => $nearestExpiry[$id] ?? null,
-                'stok_raw' => (float) ($totalStok[$id] ?? 0),
+                'stok_raw' => (float) $stok,
             ];
         }
 
         if (empty($rawData)) {
-            return [];
+            return [
+                'darurat' => $daruratData,
+                'ranked' => [],
+                'aman_count' => $amanCount,
+            ];
         }
 
         // ── Step 2: Find extremes ────────────────────────────────────────────────
@@ -216,7 +243,11 @@ class SawPriorityWidget extends Widget
 
         $rankedData = app(SawPriorityMovementTracker::class)->track($rankedData, $year);
 
-        return array_slice($rankedData, 0, 6);
+        return [
+            'darurat' => $daruratData,
+            'ranked' => array_slice($rankedData, 0, 6),
+            'aman_count' => $amanCount,
+        ];
     }
 
     private function resolveYear(): int

@@ -1,6 +1,17 @@
 <?php
+
+use App\Models\ConsignmentReturn;
 use App\Models\Transaction;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/admin/bukti-pembayaran-retur/{consignmentReturn}', function (ConsignmentReturn $consignmentReturn) {
+    $user = auth()->user();
+    abort_unless($user?->role === 'admin' || ($user?->role === 'mitra' && $user->partner_id === $consignmentReturn->partner_id), 403);
+    $path = $consignmentReturn->bukti_pembayaran;
+    abort_unless($path && str_starts_with($path, "bukti-pembayaran-retur/{$consignmentReturn->id}/") && Storage::disk('local')->exists($path), 404);
+    return Storage::disk('local')->response($path, null, ['Content-Disposition' => 'inline']);
+})->middleware('auth')->name('consignment-payment-proof.show');
 
 Route::get('/admin/print-nota/{id}', function ($id) {
     $transaction = Transaction::with(['details.productBatch.product', 'kasir'])->findOrFail($id);

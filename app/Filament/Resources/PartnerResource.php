@@ -7,6 +7,7 @@ use App\Filament\Resources\PartnerResource\Pages;
 use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentReturnsRelationManager;
 use App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentStockRelationManager;
 use App\Models\Partner;
+use App\Models\ConsignmentReturn;
 use App\Models\ProductBatch;
 use Filament\Forms;
 use Filament\Forms\Components\DatePicker;
@@ -140,11 +141,28 @@ class PartnerResource extends Resource
                     ->icon('heroicon-o-exclamation-triangle')
                     ->alignCenter()
                     ->default(0),
+                Tables\Columns\TextColumn::make('pembayaran_menunggu_validasi')
+                    ->label('Validasi Pembayaran')
+                    ->state(fn (Partner $record): int => ConsignmentReturn::where('partner_id', $record->id)
+                        ->where('status', 'menunggu_validasi')->count())
+                    ->badge()
+                    ->color(fn (int $state): string => $state > 0 ? 'warning' : 'gray')
+                    ->url(fn (Partner $record): string => static::getUrl('edit', [
+                        'record' => $record,
+                        'activeRelationManager' => '1',
+                    ])),
             ])
             ->filters([
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('riwayat_penarikan')
+                        ->label('Riwayat Penarikan')
+                        ->icon('heroicon-o-receipt-refund')
+                        ->url(fn (Partner $record): string => static::getUrl('edit', [
+                            'record' => $record,
+                            'activeRelationManager' => '1',
+                        ])),
                     Tables\Actions\ViewAction::make(),
                     Tables\Actions\EditAction::make(),
                 ]),

@@ -17,12 +17,19 @@ class ConsignmentReturn extends Model
         'harga_satuan',
         'omzet_terbentuk',
         'status',
+        'metode_pembayaran', 'bukti_pembayaran', 'nama_pengirim', 'bank_pengirim',
+        'referensi_transfer', 'dibayar_pada', 'diajukan_pada', 'divalidasi_pada',
+        'divalidasi_oleh', 'catatan_penolakan',
+        'bank_tujuan', 'rekening_tujuan', 'pemilik_rekening_tujuan',
     ];
 
     protected $casts = [
         'diskon_persen' => 'decimal:2',
         'harga_satuan' => 'integer',
         'omzet_terbentuk' => 'integer',
+        'dibayar_pada' => 'datetime',
+        'diajukan_pada' => 'datetime',
+        'divalidasi_pada' => 'datetime',
     ];
 
     public function consignmentStock()

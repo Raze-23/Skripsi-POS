@@ -1,5 +1,8 @@
 @php
-    $rankedProducts = $this->getRankedProducts();
+    $widgetData = $this->getWidgetData();
+    $daruratProducts = $widgetData['darurat'] ?? [];
+    $rankedProducts = $widgetData['ranked'] ?? [];
+    $amanCount = $widgetData['aman_count'] ?? 0;
 
     $factorMap = [
         'penjualan' => [
@@ -63,6 +66,25 @@
                     Live
                 </div>
             </x-slot>
+
+            @if (count($daruratProducts) > 0)
+                <div class="mb-6 rounded-xl bg-danger-50 p-4 border border-danger-200 dark:bg-danger-500/10 dark:border-danger-500/20">
+                    <div class="flex items-center gap-3 mb-2">
+                        <x-heroicon-s-exclamation-triangle class="h-6 w-6 text-danger-600 dark:text-danger-500" />
+                        <h3 class="text-sm font-bold text-danger-800 dark:text-danger-400 uppercase tracking-wider">
+                            Darurat: Wajib Produksi / Restok (Stok 0)
+                        </h3>
+                    </div>
+                    <ul class="mt-2 space-y-1">
+                        @foreach($daruratProducts as $darurat)
+                            <li class="flex items-center gap-2 text-sm font-medium text-danger-900 dark:text-danger-300">
+                                <span class="h-1.5 w-1.5 rounded-full bg-danger-600 dark:bg-danger-500"></span>
+                                {{ $darurat['nama'] }}
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
 
             @if ($topProduct)
                 <div class="grid divide-y divide-gray-200 dark:divide-gray-700 md:grid-cols-3 md:divide-x md:divide-y-0">
@@ -142,7 +164,7 @@
         @if ($rankedProducts)
             <x-filament::section>
                 <x-slot name="heading">
-                    Peringkat Rekomendasi
+                    Peringkat Rekomendasi SAW 
                 </x-slot>
 
                 <div class="divide-y divide-gray-100 dark:divide-gray-800">

@@ -28,6 +28,10 @@ class MitraStatsOverview extends BaseWidget
             ->where('status', 'menunggu_konfirmasi')
             ->count();
 
+        $menungguValidasi = ConsignmentReturn::where('partner_id', $partnerId)
+            ->where('status', 'menunggu_validasi')
+            ->count();
+
         $requestPending = ProductRequest::where('partner_id', $partnerId)
             ->where('status', 'pending')
             ->count();
@@ -44,6 +48,12 @@ class MitraStatsOverview extends BaseWidget
                 ->descriptionIcon($menungguKonfirmasi > 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-check-circle')
                 ->color($menungguKonfirmasi > 0 ? 'warning' : 'success')
                 ->icon('heroicon-o-receipt-refund'),
+
+            Stat::make('Pembayaran Menunggu Validasi', $menungguValidasi)
+                ->description('Admin sedang memeriksa pembayaran')
+                ->descriptionIcon('heroicon-o-clock')
+                ->color($menungguValidasi > 0 ? 'info' : 'gray')
+                ->icon('heroicon-o-banknotes'),
 
             Stat::make('Request Produk Pending', $requestPending)
                 ->description('Menunggu diproses oleh admin')

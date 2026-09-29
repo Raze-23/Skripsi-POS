@@ -9,6 +9,7 @@ use App\Filament\Resources\ProductRequestResource\Pages\ListProductRequests;
 use App\Models\ConsignmentReturn;
 use App\Models\ConsignmentStock;
 use App\Models\Partner;
+use App\Models\PaymentAccount;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductDisposal;
@@ -129,6 +130,13 @@ class ConsignmentDiscountWorkflowTest extends TestCase
             'status' => 'menunggu_konfirmasi',
         ]);
 
+        $paymentAccount = PaymentAccount::create([
+            'bank' => 'Bank Test', 'account_number' => '123456789',
+            'account_name' => 'Herbal Test', 'is_active' => true,
+        ]);
+        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Storage::disk('local')->put("bukti-pembayaran-retur/{$return->id}/test.png", 'test-proof');
+
         $this->actingAs($mitra);
         Filament::setCurrentPanel(Filament::getPanel('mitra'));
 
@@ -137,15 +145,46 @@ class ConsignmentDiscountWorkflowTest extends TestCase
                 'terjual' => 4,
                 'qty_layak' => 5,
                 'qty_rusak' => 1,
+                'metode_pembayaran' => 'transfer_bank',
+                'payment_account_id' => $paymentAccount->id,
+                'nama_pengirim' => 'Apotek Test',
+                'bank_pengirim' => 'Bank Pengirim',
+                'dibayar_pada' => now()->subMinute()->format('Y-m-d H:i:s'),
+                'bukti_pembayaran' => ['test' => "bukti-pembayaran-retur/{$return->id}/test.png"],
             ])
             ->assertHasNoTableActionErrors();
 
         $return->refresh();
         $batch->refresh();
 
-        $this->assertSame('selesai', $return->status);
+        $this->assertSame('menunggu_validasi', $return->status);
         $this->assertSame(38_400, $return->omzet_terbentuk);
-        $this->assertSame(95, $batch->stok_toko);
+        $this->assertSame(90, $batch->stok_toko);
+        $this->assertTrue(ConsignmentStock::whereKey($stock->id)->exists());
+        $this->assertSame(0, ProductDisposal::where('consignment_return_id', $return->id)->count());
+        $this->assertSame(
+            \App\Filament\Resources\PartnerResource::getUrl('edit', [
+                'record' => $partner->id,
+                'activeRelationManager' => '1',
+            ], panel: 'admin'),
+            $admin->notifications()->latest()->first()->data['actions'][0]['url']
+        );
+        $this->assertStringContainsString('activeRelationManager=1', $admin->notifications()->latest()->first()->data['actions'][0]['url']);
+
+        $this->actingAs($admin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->get(\App\Filament\Resources\PartnerResource::getUrl('edit', [
+            'record' => $partner->id,
+            'activeRelationManager' => '1',
+        ], panel: 'admin'))->assertOk()->assertSee('Riwayat Penarikan');
+        Livewire::test(\App\Filament\Resources\PartnerResource\RelationManagers\ConsignmentReturnsRelationManager::class, [
+            'ownerRecord' => $partner,
+            'pageClass' => \App\Filament\Resources\PartnerResource\Pages\EditPartner::class,
+        ])
+            ->callTableAction('validasi_pembayaran', $return)
+            ->assertHasNoTableActionErrors();
+        $this->assertSame('selesai', $return->refresh()->status);
+        $this->assertSame(95, $batch->refresh()->stok_toko);
         $this->assertFalse(ConsignmentStock::whereKey($stock->id)->exists());
         $this->assertSame(1, ProductDisposal::where('consignment_return_id', $return->id)->value('jumlah'));
 

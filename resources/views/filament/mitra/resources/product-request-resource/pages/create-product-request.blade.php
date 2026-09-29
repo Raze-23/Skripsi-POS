@@ -272,9 +272,7 @@
 
                 <div>
                     <h3 class="pr-product-detail-name">{{ $this->detailProduct->nama }}</h3>
-                    <p class="pr-product-detail-description">
-                        {{ $this->detailProduct->deskripsi ?: 'Belum ada deskripsi untuk produk ini.' }}
-                    </p>
+                    <p class="pr-product-detail-description">{{ $this->detailProduct->deskripsi ?: 'Belum ada deskripsi untuk produk ini.' }}</p>
                 </div>
 
                 <div class="pr-product-detail-facts">

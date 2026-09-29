@@ -196,7 +196,7 @@ class CreateProductRequest extends Page
                 ->join('product_batches as pb', 'pb.id', '=', 'cr.product_batch_id')
                 ->where('cr.partner_id', $partnerId)
                 ->where('cr.status', 'selesai')
-                ->whereBetween('cr.created_at', [$periodStart, $periodEnd])
+                ->whereBetween(DB::raw('COALESCE(cr.divalidasi_pada, cr.created_at)'), [$periodStart, $periodEnd])
                 ->selectRaw('pb.product_id, SUM(cr.terjual) as total_terjual')
                 ->groupBy('pb.product_id')
                 ->havingRaw('SUM(cr.terjual) > 0')

@@ -220,7 +220,7 @@ class ConsignmentStockRelationManager extends RelationManager
                     ->mountUsing(function (Model $record, ?Form $form, Tables\Actions\Action $action) {
                         $sudahDiajukan = ConsignmentReturn::where('product_batch_id', $record->product_batch_id)
                             ->where('partner_id', $this->getOwnerRecord()->id)
-                            ->where('status', 'menunggu_konfirmasi')
+                            ->whereIn('status', ['menunggu_konfirmasi', 'menunggu_validasi'])
                             ->exists();
 
                         if ($sudahDiajukan) {
@@ -252,10 +252,11 @@ class ConsignmentStockRelationManager extends RelationManager
                     ])
                     ->action(function (Model $record, array $data) {
                         $berhasil = false;
-                        DB::transaction(function () use ($record, $data, &$berhasil) {
+                        $newReturnId = null;
+                        DB::transaction(function () use ($record, $data, &$berhasil, &$newReturnId) {
                             $sudahDiajukan = ConsignmentReturn::where('product_batch_id', $record->product_batch_id)
                                 ->where('partner_id', $this->getOwnerRecord()->id)
-                                ->where('status', 'menunggu_konfirmasi')
+                                ->whereIn('status', ['menunggu_konfirmasi', 'menunggu_validasi'])
                                 ->lockForUpdate()
                                 ->exists();
 
@@ -263,7 +264,7 @@ class ConsignmentStockRelationManager extends RelationManager
                                 return;
                             }
 
-                            ConsignmentReturn::create([
+                            $newReturn = ConsignmentReturn::create([
                                 'partner_id' => $this->getOwnerRecord()->id,
                                 'product_batch_id' => $record->product_batch_id,
                                 'sales_id' => $data['sales_id'],
@@ -276,6 +277,7 @@ class ConsignmentStockRelationManager extends RelationManager
                                 'status' => 'menunggu_konfirmasi',
                             ]);
 
+                            $newReturnId = $newReturn->id;
                             $berhasil = true;
                         });
 
@@ -288,6 +290,22 @@ class ConsignmentStockRelationManager extends RelationManager
                                 ->send();
 
                             return;
+                        }
+
+                        $mitraUsers = $this->getOwnerRecord()->users()->where('role', 'mitra')->where('status', 'aktif')->get();
+                        $namaProduct = $record->productBatch->product->nama ?? 'Produk';
+                        $batchCode = $record->productBatch->batch_code ?? '-';
+                        $tanggalAjuan = now()->format('d M Y');
+
+                        foreach ($mitraUsers as $mitraUser) {
+                            $key = "pengingat_retur_{$newReturnId}_user_{$mitraUser->id}";
+                            Notification::make()
+                                ->warning()
+                                ->icon('heroicon-o-clipboard-document-list')
+                                ->title("📋 Segera Isi Rincian Retur: {$namaProduct}")
+                                ->body("Admin telah menarik {$namaProduct} (Batch: {$batchCode}) sejak {$tanggalAjuan}. Silakan segera isi rincian retur (terjual/layak jual/rusak) agar proses retur dapat diselesaikan.")
+                                ->viewData(['alert_key' => $key])
+                                ->sendToDatabase($mitraUser);
                         }
 
                         Notification::make()

@@ -43,6 +43,8 @@ class MitraPanelProvider extends PanelProvider
             ->favicon(asset('images/logo-attiin.png'))
             ->profile(MitraEditProfile::class)
             ->darkMode(false)
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->discoverResources(in: app_path('Filament/Mitra/Resources'), for: 'App\\Filament\\Mitra\\Resources')
             ->discoverPages(in: app_path('Filament/Mitra/Pages'), for: 'App\\Filament\\Mitra\\Pages')
             ->pages([
@@ -68,7 +70,12 @@ class MitraPanelProvider extends PanelProvider
                 PanelsRenderHook::HEAD_END,
                 fn (): string => request()->routeIs('filament.mitra.auth.login', 'filament.mitra.auth.register')
                     ? view('filament.mitra.auth-theme')->render()
-                    : '',
+                    : '<style>
+                        .fi-topbar-database-notifications-btn .fi-badge {
+                            background-color: rgb(239 68 68) !important;
+                            color: white !important;
+                        }
+                    </style>',
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,

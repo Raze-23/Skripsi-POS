@@ -11,6 +11,7 @@ use Filament\Support\Enums\MaxWidth;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 
 class CreateOwnerProductRequest extends Page
@@ -169,7 +170,7 @@ class CreateOwnerProductRequest extends Page
                     ->selectRaw('COALESCE(SUM(monthly_returns.terjual), 0)')
                     ->whereColumn('consignment_batches.product_id', 'products.id')
                     ->where('monthly_returns.status', 'selesai')
-                    ->whereBetween('monthly_returns.created_at', [$monthStart, $monthEnd]);
+                    ->whereBetween(DB::raw('COALESCE(monthly_returns.divalidasi_pada, monthly_returns.created_at)'), [$monthStart, $monthEnd]);
             }, 'terjual_mitra_bulan_ini')
             ->selectSub(function ($query) {
                 $query->from('product_requests as active_partner_requests')

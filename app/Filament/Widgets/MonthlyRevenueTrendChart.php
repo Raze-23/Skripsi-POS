@@ -31,10 +31,10 @@ class MonthlyRevenueTrendChart extends ChartWidget
             ->pluck('total', 'bulan');
 
         $apotekPerMonth = DB::table('consignment_returns')
-            ->whereYear('consignment_returns.created_at', $year)
+            ->whereYear(DB::raw('COALESCE(consignment_returns.divalidasi_pada, consignment_returns.created_at)'), $year)
             ->where('consignment_returns.status', 'selesai')
             ->select(
-                DB::raw('MONTH(consignment_returns.created_at) as bulan'),
+                DB::raw('MONTH(COALESCE(consignment_returns.divalidasi_pada, consignment_returns.created_at)) as bulan'),
                 DB::raw('SUM(consignment_returns.omzet_terbentuk) as total')
             )
             ->groupBy('bulan')

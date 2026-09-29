@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PartnerResource\RelationManagers;
 use App\Models\ConsignmentReturn;
 use App\Models\ConsignmentStock;
 use App\Models\ProductDisposal;
+use App\Services\ConsignmentReturnPaymentService;
 use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -58,7 +59,7 @@ class ConsignmentReturnsRelationManager extends RelationManager
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Waktu Penarikan')
+                    ->label('Diajukan')
                     ->dateTime('d M Y, H:i')
                     ->sortable()
                     ->icon('heroicon-o-calendar-days')
@@ -69,61 +70,80 @@ class ConsignmentReturnsRelationManager extends RelationManager
                     ->icon('heroicon-o-identification')
                     ->searchable()
                     ->sortable()
-                    ->default('-'),
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('productBatch.product.nama')
                     ->label('Nama Produk')
                     ->searchable()
                     ->weight('bold')
-                    ->description(fn (Model $record): string => $record->productBatch?->batch_code ?? '-'),
+                    ->description(fn (Model $record): string => ($record->productBatch?->batch_code ?? '-').' · Sales: '.($record->sales?->nama ?? '-')),
+                Tables\Columns\TextColumn::make('rincian_barang')
+                    ->label('Rincian Barang')
+                    ->state(fn (ConsignmentReturn $record): string => "{$record->terjual} laku · {$record->qty_layak} layak · {$record->qty_rusak} rusak")
+                    ->wrap(),
                 Tables\Columns\TextColumn::make('terjual')
                     ->label('Terjual')
                     ->badge()
                     ->color('success')
                     ->icon('heroicon-o-currency-dollar')
                     ->suffix(' pcs')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('qty_layak')
                     ->label('Layak')
                     ->badge()
                     ->color('info')
                     ->icon('heroicon-o-arrow-path')
                     ->suffix(' pcs')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('qty_rusak')
                     ->label('Rusak')
                     ->badge()
                     ->color('danger')
                     ->icon('heroicon-o-archive-box-x-mark')
                     ->suffix(' pcs')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('diskon_persen')
                     ->label('Diskon')
                     ->formatStateUsing(fn ($state): string => number_format((float) $state, 2, ',', '.').'%')
                     ->badge()
-                    ->color(fn ($state): string => (float) $state > 0 ? 'success' : 'gray'),
+                    ->color(fn ($state): string => (float) $state > 0 ? 'success' : 'gray')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('harga_satuan')
                     ->label('Harga Mitra')
                     ->money('IDR', locale: 'id')
-                    ->description('per pcs'),
+                    ->description('per pcs')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('omzet_terbentuk')
-                    ->label('Omzet')
+                    ->label('Tagihan / Omzet')
                     ->money('IDR', locale: 'id')
                     ->state(fn (ConsignmentReturn $record): int => (int) $record->omzet_terbentuk)
                     ->icon('heroicon-o-banknotes')
                     ->color('primary')
                     ->weight('bold')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('metode_pembayaran')
+                    ->label('Pembayaran')
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'transfer_bank' => 'Transfer Bank',
+                        'tunai_sales' => 'Tunai ke Sales',
+                        default => '-',
+                    }),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->color(fn (string $state) => match ($state) {
                         'menunggu_konfirmasi' => 'warning',
+                        'menunggu_validasi' => 'info',
                         'selesai' => 'success',
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state) => match ($state) {
                         'menunggu_konfirmasi' => 'Menunggu Konfirmasi',
+                        'menunggu_validasi' => 'Menunggu Validasi Pembayaran',
                         'selesai' => 'Selesai',
                         default => $state,
                     }),
@@ -184,6 +204,39 @@ class ConsignmentReturnsRelationManager extends RelationManager
                     }),
             ])
             ->actions([
+                Tables\Actions\Action::make('validasi_pembayaran')
+                    ->label('Validasi Pembayaran')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('primary')
+                    ->visible(fn (ConsignmentReturn $record): bool => $record->status === 'menunggu_validasi' && Auth::user()?->role === 'admin')
+                    ->modalHeading(fn (ConsignmentReturn $record): string => 'Validasi Pembayaran: '.$record->partner->nama_apotek)
+                    ->modalWidth('4xl')
+                    ->modalContent(fn (ConsignmentReturn $record) => view('filament.consignment-payment-review', ['record' => $record]))
+                    ->requiresConfirmation()
+                    ->modalSubmitActionLabel('Terima & Selesaikan')
+                    ->action(function (ConsignmentReturn $record): void {
+                        app(ConsignmentReturnPaymentService::class)->approve($record, Auth::user());
+                        Notification::make()->success()->title('Pembayaran Diterima')->send();
+                    }),
+                Tables\Actions\Action::make('tolak_pembayaran')
+                    ->label('Minta Perbaikan')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (ConsignmentReturn $record): bool => $record->status === 'menunggu_validasi' && Auth::user()?->role === 'admin')
+                    ->modalHeading('Minta Perbaikan Pembayaran')
+                    ->modalWidth('4xl')
+                    ->modalContent(fn (ConsignmentReturn $record) => view('filament.consignment-payment-review', ['record' => $record]))
+                    ->form([
+                        Forms\Components\Textarea::make('alasan')
+                            ->label('Alasan untuk Mitra')
+                            ->required()
+                            ->minLength(10)
+                            ->maxLength(1000),
+                    ])
+                    ->action(function (ConsignmentReturn $record, array $data): void {
+                        app(ConsignmentReturnPaymentService::class)->reject($record, Auth::user(), $data['alasan']);
+                        Notification::make()->success()->title('Mitra Diminta Memperbaiki Pembayaran')->send();
+                    }),
                 Tables\Actions\Action::make('isi_rincian')
                     ->label('Isi Rincian')
                     ->icon('heroicon-o-pencil-square')
